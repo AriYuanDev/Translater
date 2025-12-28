@@ -12,6 +12,10 @@
     let currentFloatButtons = null;
     let hideFloatButtonsTimeout = null;
 
+    // 缓存美式英语语音
+    let cachedUSVoice = null;
+    let voicesLoaded = false;
+
     // ==================== 工具函数 ====================
 
     // 创建发音图标 SVG
@@ -21,11 +25,15 @@
     </svg>`;
     }
 
-    // HTML 转义函数，防止 XSS 攻击
+    // HTML 转义函数，防止 XSS 攻击（优化版：使用字符串替换而不是创建 DOM）
     function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     // 使用 Web Speech API 朗读文本（本地实现）
@@ -38,17 +46,23 @@
         utterance.rate = 0.9; // 稍慢一点的语速
         utterance.pitch = 1;
 
-        // 尝试获取美式英语语音
-        const voices = window.speechSynthesis.getVoices();
-        const usVoice = voices.find(voice =>
-            voice.lang === 'en-US' && voice.name.includes('Samantha')
-        ) || voices.find(voice => voice.lang === 'en-US');
-
-        if (usVoice) {
-            utterance.voice = usVoice;
+        // 使用缓存的美式英语语音
+        if (cachedUSVoice) {
+            utterance.voice = cachedUSVoice;
         }
 
         window.speechSynthesis.speak(utterance);
+    }
+
+    // 加载并缓存语音列表
+    function loadVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0 && !voicesLoaded) {
+            cachedUSVoice = voices.find(voice =>
+                voice.lang === 'en-US' && voice.name.includes('Samantha')
+            ) || voices.find(voice => voice.lang === 'en-US');
+            voicesLoaded = true;
+        }
     }
 
     // 播放音频URL（失败时回退到TTS）
@@ -541,10 +555,8 @@
 
     // 预加载语音列表
     if (window.speechSynthesis) {
-        window.speechSynthesis.getVoices();
-        window.speechSynthesis.onvoiceschanged = () => {
-            window.speechSynthesis.getVoices();
-        };
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
     }
 
     console.log('快译扩展已加载');

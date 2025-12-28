@@ -1,5 +1,35 @@
 // 快译 - Chrome 翻译扩展后台服务
 
+// ==================== 词典缓存 ====================
+
+// 简单的 LRU 缓存，最多存储 100 个单词，30 分钟过期
+const dictionaryCache = new Map();
+const CACHE_MAX_SIZE = 100;
+const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
+
+function getCachedDictionary(word) {
+  const cached = dictionaryCache.get(word);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    // 移到末尾以实现 LRU
+    dictionaryCache.delete(word);
+    dictionaryCache.set(word, cached);
+    return cached.data;
+  }
+  if (cached) {
+    dictionaryCache.delete(word); // 删除过期缓存
+  }
+  return null;
+}
+
+function setCachedDictionary(word, data) {
+  // 如果缓存满了，删除最旧的
+  if (dictionaryCache.size >= CACHE_MAX_SIZE) {
+    const firstKey = dictionaryCache.keys().next().value;
+    dictionaryCache.delete(firstKey);
+  }
+  dictionaryCache.set(word, { data, timestamp: Date.now() });
+}
+
 // ==================== PDF 重定向 ====================
 
 // 检查 URL 是否是 PDF
@@ -48,9 +78,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// 获取词典数据 - 从 Cambridge Dictionary 获取
+// 获取词典数据 - 从 Cambridge Dictionary 获取（带缓存）
 async function fetchDictionary(word) {
-  const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(word.toLowerCase())}`;
+  const normalizedWord = word.toLowerCase();
+
+  // 检查缓存
+  const cached = getCachedDictionary(normalizedWord);
+  if (cached) {
+    console.log(`[缓存命中] ${normalizedWord}`);
+    return cached;
+  }
+
+  const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(normalizedWord)}`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -65,6 +104,9 @@ async function fetchDictionary(word) {
   if (!result) {
     throw new Error('未找到该单词');
   }
+
+  // 存入缓存
+  setCachedDictionary(normalizedWord, result);
 
   return result;
 }
