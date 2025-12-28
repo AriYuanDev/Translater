@@ -337,8 +337,8 @@ function autoSpeakWord(data, word) {
 
     if (data.phonetics && data.phonetics.length > 0) {
         for (const p of data.phonetics) {
-            // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
-            if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
+            // 优先选择美式发音（MW、Cambridge、老 API）
+            if (p.audio && (p.audio.includes('merriam-webster.com') || p.audio.includes('us_pron') || p.audio.includes('-us') || p.audio.includes('/us/'))) {
                 audioUrl = p.audio;
                 break;
             }
@@ -458,8 +458,8 @@ function renderWordPopup(data, originalWord) {
 
     if (data.phonetics && data.phonetics.length > 0) {
         for (const p of data.phonetics) {
-            // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
-            if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
+            // 优先选择美式发音（MW、Cambridge、老 API）
+            if (p.audio && (p.audio.includes('merriam-webster.com') || p.audio.includes('us_pron') || p.audio.includes('-us') || p.audio.includes('/us/'))) {
                 audioUrl = p.audio;
                 if (p.text) phonetic = p.text;
                 break;

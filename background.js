@@ -98,9 +98,214 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
+
+  // Merriam-Webster API 密钥管理
+  if (request.action === 'setMWApiKey') {
+    setMWApiKey(request.apiKey)
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'getMWApiKey') {
+    getMWApiKey()
+      .then(apiKey => sendResponse({ success: true, apiKey: apiKey ? '已配置' : '' }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
 
-// 获取词典数据 - 从 Cambridge Dictionary 获取（带缓存）
+// ==================== Merriam-Webster API 配置 ====================
+
+// API Key 内存缓存（避免每次查询都读取 storage）
+let cachedMWApiKey = null;
+let mwApiKeyCacheTime = 0;
+const MW_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 分钟缓存
+
+// 获取存储的 Merriam-Webster API 密钥（带内存缓存）
+async function getMWApiKey() {
+  // 检查内存缓存是否有效
+  if (cachedMWApiKey !== null && Date.now() - mwApiKeyCacheTime < MW_KEY_CACHE_TTL) {
+    return cachedMWApiKey;
+  }
+
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['mwApiKey'], (result) => {
+      cachedMWApiKey = result.mwApiKey || '';
+      mwApiKeyCacheTime = Date.now();
+      resolve(cachedMWApiKey);
+    });
+  });
+}
+
+// 保存 Merriam-Webster API 密钥
+async function setMWApiKey(apiKey) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ mwApiKey: apiKey }, () => {
+      // 更新内存缓存
+      cachedMWApiKey = apiKey;
+      mwApiKeyCacheTime = Date.now();
+      resolve(true);
+    });
+  });
+}
+
+// 构造 Merriam-Webster 音频 URL
+function buildMWAudioUrl(audioFileName) {
+  if (!audioFileName) return '';
+
+  // 确定子目录
+  let subdirectory;
+  if (audioFileName.startsWith('bix')) {
+    subdirectory = 'bix';
+  } else if (audioFileName.startsWith('gg')) {
+    subdirectory = 'gg';
+  } else if (/^[0-9_]/.test(audioFileName)) {
+    subdirectory = 'number';
+  } else {
+    subdirectory = audioFileName.charAt(0);
+  }
+
+  return `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdirectory}/${audioFileName}.mp3`;
+}
+
+// 预编译的正则表达式（避免每次调用都重新编译）
+const MW_REGEX_REMOVE = /\{(?:bc|it|\/it|b|\/b)\}/g;
+const MW_REGEX_QUOTES = /\{(?:ldquo|rdquo)\}/g;
+const MW_REGEX_SX = /\{sx\|[^}]*\}/g;
+const MW_REGEX_DX = /\{dx\}[\s\S]*?\{\/dx\}/g;
+const MW_REGEX_DX_DEF = /\{dx_def\}[\s\S]*?\{\/dx_def\}/g;
+const MW_REGEX_A_LINK = /\{a_link\|([^}]*)\}/g;
+const MW_REGEX_D_LINK = /\{d_link\|([^|]*)\|[^}]*\}/g;
+const MW_REGEX_ALL_TAGS = /\{[^}]*\}/g;
+const MW_REGEX_WHITESPACE = /\s+/g;
+
+// 解析 Merriam-Webster API 返回的定义文本（去除标记）- 使用预编译正则
+function parseMWDefinitionText(text) {
+  if (!text) return '';
+  return text
+    .replace(MW_REGEX_REMOVE, '')
+    .replace(MW_REGEX_QUOTES, '"')
+    .replace(MW_REGEX_SX, '')
+    .replace(MW_REGEX_DX, '')
+    .replace(MW_REGEX_DX_DEF, '')
+    .replace(MW_REGEX_A_LINK, '$1')
+    .replace(MW_REGEX_D_LINK, '$1')
+    .replace(MW_REGEX_ALL_TAGS, '')
+    .replace(MW_REGEX_WHITESPACE, ' ')
+    .trim();
+}
+
+// 解析 Merriam-Webster Learners Dictionary API 响应
+function parseMWLearnersResponse(data, word) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+
+  // 检查是否返回的是字符串数组（建议词）而不是词条
+  if (typeof data[0] === 'string') {
+    console.log('[MW API] 返回建议词而非词条:', data.slice(0, 5));
+    return null;
+  }
+
+  const entry = data[0];
+
+  // 提取音标和音频
+  let phonetic = '';
+  let audioUrl = '';
+
+  if (entry.hwi && entry.hwi.prs && entry.hwi.prs.length > 0) {
+    const pron = entry.hwi.prs[0];
+    // Learners Dictionary 使用 ipa 字段
+    if (pron.ipa) {
+      phonetic = `/${pron.ipa}/`;
+    }
+    // 音频文件
+    if (pron.sound && pron.sound.audio) {
+      audioUrl = buildMWAudioUrl(pron.sound.audio);
+    }
+  }
+
+  // 提取词性
+  const partOfSpeech = entry.fl || 'word';
+
+  // 提取释义
+  const meanings = [];
+  const definitions = [];
+
+  if (entry.shortdef && entry.shortdef.length > 0) {
+    // 使用 shortdef（简短定义）- 更适合快速查看
+    for (const def of entry.shortdef.slice(0, 3)) {
+      definitions.push({ definition: def });
+    }
+  } else if (entry.def && entry.def.length > 0) {
+    // 使用完整定义
+    for (const defBlock of entry.def.slice(0, 1)) {
+      if (defBlock.sseq) {
+        for (const senseSeq of defBlock.sseq.slice(0, 3)) {
+          for (const sense of senseSeq) {
+            if (sense[0] === 'sense' && sense[1] && sense[1].dt) {
+              for (const dt of sense[1].dt) {
+                if (dt[0] === 'text') {
+                  const defText = parseMWDefinitionText(dt[1]);
+                  if (defText) {
+                    definitions.push({ definition: defText });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (definitions.length > 0) {
+    meanings.push({
+      partOfSpeech: partOfSpeech,
+      definitions: definitions.slice(0, 3)
+    });
+  }
+
+  // 检查其他词条是否有不同词性
+  for (let i = 1; i < Math.min(data.length, 3); i++) {
+    const otherEntry = data[i];
+    if (typeof otherEntry === 'string') continue;
+
+    // 检查是否是同一个词的不同词性
+    const otherId = otherEntry.meta?.id?.replace(/:\d+$/, '') || '';
+    if (otherId.toLowerCase() !== word.toLowerCase()) continue;
+
+    const otherPOS = otherEntry.fl;
+    if (otherPOS && otherPOS !== partOfSpeech) {
+      const otherDefs = [];
+      if (otherEntry.shortdef && otherEntry.shortdef.length > 0) {
+        for (const def of otherEntry.shortdef.slice(0, 2)) {
+          otherDefs.push({ definition: def });
+        }
+      }
+      if (otherDefs.length > 0) {
+        meanings.push({
+          partOfSpeech: otherPOS,
+          definitions: otherDefs
+        });
+      }
+    }
+  }
+
+  if (meanings.length === 0) {
+    return null;
+  }
+
+  return {
+    word: word,
+    phonetic: phonetic,
+    phonetics: phonetic || audioUrl ? [{ text: phonetic, audio: audioUrl }] : [],
+    meanings: meanings
+  };
+}
+
+// 获取词典数据 - 使用 Merriam-Webster Learners Dictionary API（带缓存）
 async function fetchDictionary(word) {
   const normalizedWord = word.toLowerCase();
 
@@ -111,17 +316,30 @@ async function fetchDictionary(word) {
     return cached;
   }
 
-  const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(normalizedWord)}`;
+  // 获取 API Key
+  const apiKey = await getMWApiKey();
+  if (!apiKey) {
+    throw new Error('请先配置 Merriam-Webster API Key');
+  }
+
+  // 调用 Merriam-Webster Learners Dictionary API
+  const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
+
+  console.log(`[MW API] 查询: ${normalizedWord}`);
+
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error('未找到该单词');
+    if (response.status === 403) {
+      throw new Error('API Key 无效或已过期');
+    }
+    throw new Error('词典服务暂时不可用');
   }
 
-  const html = await response.text();
+  const data = await response.json();
 
-  // 解析 HTML 获取音标和释义
-  const result = parseCambridgeDictionary(html, word);
+  // 解析 API 响应
+  const result = parseMWLearnersResponse(data, word);
 
   if (!result) {
     throw new Error('未找到该单词');
@@ -131,124 +349,6 @@ async function fetchDictionary(word) {
   setCachedDictionary(normalizedWord, result);
 
   return result;
-}
-
-// 解析 Cambridge Dictionary HTML
-function parseCambridgeDictionary(html, word) {
-  try {
-    const normalizedWord = word.toLowerCase();
-
-    // 验证页面确实包含我们查询的单词
-    // 检查页面标题或词条标题是否匹配
-    const headwordMatch = html.match(/<span class="hw dhw">([^<]+)<\/span>/);
-    const pageHeadword = headwordMatch ? headwordMatch[1].toLowerCase().trim() : '';
-
-    // 如果页面词条与查询词不匹配，返回 null（可能是被重定向到其他页面）
-    if (!pageHeadword || !pageHeadword.includes(normalizedWord.replace(/s$/, '')) && !normalizedWord.includes(pageHeadword)) {
-      console.log(`[词条不匹配] 查询: ${normalizedWord}, 页面: ${pageHeadword}`);
-      return null;
-    }
-
-    // 辅助函数：从 IPA span 中提取音标（处理嵌套的 span 标签）
-    function extractPhonetic(ipaHtml) {
-      if (!ipaHtml) return '';
-      // 移除所有 HTML 标签，只保留文本
-      const text = ipaHtml.replace(/<[^>]+>/g, '').trim();
-      return text ? `/${text}/` : '';
-    }
-
-    // 提取英式音标 (UK) - 第一个匹配项（支持嵌套 span）
-    const ukPhoneticMatch = html.match(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/);
-    const ukPhonetic = ukPhoneticMatch ? extractPhonetic(ukPhoneticMatch[1]) : '';
-
-    // 提取美式音标 (US) - 查找 us dpron-i 区域
-    let usPhonetic = '';
-    const usRegion = html.match(/<span class="us dpron-i[^"]*"[^>]*>([\s\S]*?)<\/span>\s*<\/div>/);
-    if (usRegion) {
-      const usPhoneticMatch = usRegion[1].match(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/);
-      usPhonetic = usPhoneticMatch ? extractPhonetic(usPhoneticMatch[1]) : '';
-    }
-
-    // 如果没有找到美式音标，尝试从页面中找第二个 ipa 标签（通常是美式）
-    if (!usPhonetic) {
-      const allPhonetics = [...html.matchAll(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/g)];
-      if (allPhonetics.length >= 2) {
-        usPhonetic = extractPhonetic(allPhonetics[1][1]);
-      }
-    }
-
-    // 提取美式发音音频 URL
-    const usAudioMatch = html.match(/<source[^>]+src="([^"]*us_pron[^"]*\.mp3)"/);
-    const usAudioUrl = usAudioMatch ? `https://dictionary.cambridge.org${usAudioMatch[1]}` : '';
-
-    // 提取英式发音音频 URL
-    const ukAudioMatch = html.match(/<source[^>]+src="([^"]*uk_pron[^"]*\.mp3)"/);
-    const ukAudioUrl = ukAudioMatch ? `https://dictionary.cambridge.org${ukAudioMatch[1]}` : '';
-
-    // 提取释义
-    const meanings = [];
-
-    // 使用更简单直接的方式：先找所有词性，再找对应的定义
-    // 找到所有 pos-header 区块（每个词性一个区块）
-    const posHeaderMatches = [...html.matchAll(/<span class="pos dpos"[^>]*>([^<]+)<\/span>/g)];
-    const defMatches = [...html.matchAll(/<div class="def ddef_d db"[^>]*>([\s\S]*?)<\/div>/g)];
-
-    // 提取所有定义文本（去除HTML标签）
-    const allDefinitions = defMatches.map(match => {
-      // 移除所有 HTML 标签，保留文本
-      let text = match[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-      // 转义 HTML 特殊字符防止 XSS
-      text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return text;
-    }).filter(def => def.length > 0);
-
-    // 获取唯一的词性列表
-    const uniquePOS = [...new Set(posHeaderMatches.map(m => m[1]))];
-
-    // 简化处理：将定义分配给词性
-    if (uniquePOS.length > 0 && allDefinitions.length > 0) {
-      // 对于每个词性，分配一些定义
-      const defsPerPOS = Math.max(1, Math.floor(allDefinitions.length / uniquePOS.length));
-      let defIndex = 0;
-
-      for (const pos of uniquePOS.slice(0, 3)) { // 最多3个词性
-        const definitions = [];
-        for (let i = 0; i < Math.min(2, defsPerPOS) && defIndex < allDefinitions.length; i++) {
-          definitions.push({ definition: allDefinitions[defIndex] });
-          defIndex++;
-        }
-        if (definitions.length > 0) {
-          meanings.push({
-            partOfSpeech: pos,
-            definitions
-          });
-        }
-      }
-    }
-
-    // 如果上面的方法没有找到，使用备用方法
-    if (meanings.length === 0 && allDefinitions.length > 0) {
-      const pos = uniquePOS[0] || 'word';
-      meanings.push({
-        partOfSpeech: pos,
-        definitions: allDefinitions.slice(0, 2).map(def => ({ definition: def }))
-      });
-    }
-
-    // 构建返回数据，格式与原 API 兼容（优先使用美式音标）
-    return {
-      word: word,
-      phonetic: usPhonetic || ukPhonetic, // 优先使用美式音标
-      phonetics: [
-        { text: usPhonetic, audio: usAudioUrl }, // US（优先）
-        { text: ukPhonetic, audio: ukAudioUrl }  // UK
-      ].filter(p => p.text || p.audio),
-      meanings: meanings
-    };
-  } catch (error) {
-    console.error('解析 Cambridge Dictionary 失败:', error);
-    return null;
-  }
 }
 
 // ==================== DeepL API 配置 ====================

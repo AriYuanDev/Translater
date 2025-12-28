@@ -240,11 +240,14 @@
         let phonetic = data.phonetic || '';
         let audioUrl = '';
 
-        // 尝试获取美式音标和音频（兼容 Cambridge 和老 API）
+        // 尝试获取美式音标和音频（兼容 MW、Cambridge 和老 API）
         if (data.phonetics && data.phonetics.length > 0) {
             for (const p of data.phonetics) {
-                // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
-                if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
+                // 优先选择美式发音
+                // MW 格式: merriam-webster.com/audio/prons/en/us/
+                // Cambridge 格式: us_pron
+                // 老 API 格式: -us
+                if (p.audio && (p.audio.includes('merriam-webster.com') || p.audio.includes('us_pron') || p.audio.includes('-us') || p.audio.includes('/us/'))) {
                     audioUrl = p.audio;
                     if (p.text) phonetic = p.text;
                     break;

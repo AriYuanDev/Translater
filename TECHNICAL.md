@@ -1,6 +1,6 @@
 # 快译 技术手册
 
-> **版本**: 1.2.0  
+> **版本**: 1.3.0  
 > **更新日期**: 2025-12-28
 
 ## 概述
@@ -24,7 +24,7 @@
 │  ┌─────────────┐                ┌─────────────────────┐    │
 │  │ styles.css  │                │   外部 API 请求      │    │
 │  │  (样式文件)  │                │ - DeepL API         │    │
-│  └─────────────┘                │ - Cambridge Dict    │    │
+│  └─────────────┘                │ - Merriam-Webster   │    │
 │                                 │ - Google Translate  │    │
 │                                 └─────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
@@ -37,7 +37,7 @@
 | 文件 | 类型 | 说明 |
 |------|------|------|
 | `manifest.json` | 配置 | 扩展清单，定义权限和资源 |
-| `background.js` | JS | Service Worker，处理 API 请求、词典缓存、DeepL/Google 翻译 |
+| `background.js` | JS | Service Worker，处理 API 请求、词典缓存、MW 词典、DeepL/Google 翻译 |
 | `content.js` | JS | 内容脚本，处理页面交互和 UI |
 | `styles.css` | CSS | 弹窗和按钮样式 |
 | `options.html` | HTML | 设置页面 UI |
@@ -53,35 +53,32 @@
 #### 功能职责
 
 - 处理来自 content.js 的消息
-- 调用 Cambridge Dictionary 获取单词信息
+- 调用 **Merriam-Webster Learners Dictionary API** 获取单词信息（IPA 音标）
 - **LRU 词典缓存**（100 词上限，30 分钟过期）
+- **API Key 内存缓存**（5 分钟缓存，减少 storage 读取）
 - 调用 **DeepL API** 获取高质量翻译（优先）
 - 调用 Google Translate 作为备用翻译引擎
-- 管理 DeepL API 密钥存储
+- 管理 MW/DeepL API 密钥存储
 - 拦截 PDF 文件并重定向到自定义阅读器
 
 #### 关键函数
 
 ```javascript
-// 词典缓存管理
+// 词典缓存管理（LRU）
 function getCachedDictionary(word)
 function setCachedDictionary(word, data)
 
-// 获取词典数据（带缓存）
-async function fetchDictionary(word)
-
-// 解析 Cambridge Dictionary HTML
-function parseCambridgeDictionary(html, word)
-
-// 从 IPA span 中提取音标（处理嵌套标签）
-function extractPhonetic(ipaHtml)
+// Merriam-Webster API
+async function getMWApiKey()      // 带内存缓存
+async function setMWApiKey(apiKey)
+function buildMWAudioUrl(audioFileName)  // 构造音频 URL
+function parseMWDefinitionText(text)     // 解析定义文本（预编译正则）
+function parseMWLearnersResponse(data, word)  // 解析 API 响应
+async function fetchDictionary(word)     // 获取词典数据（带缓存）
 
 // DeepL API 密钥管理
 async function getDeepLApiKey()
 async function setDeepLApiKey(apiKey)
-
-// 语言代码转换
-function convertToDeepLLang(lang)
 
 // 翻译函数
 async function translateWithDeepL(text, targetLang, apiKey)
@@ -97,20 +94,22 @@ const CACHE_MAX_SIZE = 100;      // 最多缓存 100 个单词
 const CACHE_TTL = 30 * 60 * 1000; // 30 分钟过期
 ```
 
-#### 音标解析
+#### Merriam-Webster API 响应解析
 
-Cambridge Dictionary 的音标包含嵌套的 HTML 标签：
-```html
-<span class="ipa">ˈnæʃ.<span class="sp dsp">ə</span>n.əl</span>
-```
-
-使用 `extractPhonetic()` 函数清理：
+MW Learners Dictionary API 返回 JSON，包含 IPA 音标：
 ```javascript
-function extractPhonetic(ipaHtml) {
-  const text = ipaHtml.replace(/<[^>]+>/g, '').trim();
-  return text ? `/${text}/` : '';
+// API 响应结构
+{
+  hwi: { hw: "ap*ple", prs: [{ ipa: "ˈæpəl", sound: { audio: "apple001" } }] },
+  fl: "noun",
+  shortdef: ["a round fruit with red, yellow, or green skin"]
 }
-// 输出: /ˈnæʃ.ən.əl/
+
+// 音频 URL 构造
+function buildMWAudioUrl(audioFileName) {
+  const subdirectory = audioFileName.charAt(0);  // 或 'bix', 'gg', 'number'
+  return `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdirectory}/${audioFileName}.mp3`;
+}
 ```
 
 #### API 数据格式
@@ -210,11 +209,19 @@ content.js 与 background.js 通过 Chrome Message API 通信：
 - 30 分钟自动过期
 - 缓存命中时跳过网络请求
 
-### 2. 语音缓存
+### 2. API Key 内存缓存
+- MW API Key 缓存 5 分钟
+- 减少 chrome.storage 读取次数
+
+### 3. 正则表达式预编译
+- MW 定义文本解析使用预编译正则
+- 避免每次调用都重新编译
+
+### 4. 语音缓存
 - 预加载美式英语语音对象
 - 避免每次朗读时调用 `getVoices()`
 
-### 3. escapeHtml 优化
+### 5. escapeHtml 优化
 - 使用字符串替换代替 DOM 操作
 - 减少 DOM 创建开销
 
@@ -238,13 +245,14 @@ function escapeHtml(text) {
 }
 ```
 
-### 词条验证
+### API 响应验证
 
-解析 Cambridge 页面前验证词条匹配：
+MW API 返回建议词时表示未找到词条：
 ```javascript
-const headwordMatch = html.match(/<span class="hw dhw">([^<]+)<\/span>/);
-if (!pageHeadword.includes(normalizedWord)) {
-  return null;  // 防止返回错误词条的音标
+// 检查是否返回的是字符串数组（建议词）而不是词条
+if (typeof data[0] === 'string') {
+  console.log('[MW API] 返回建议词而非词条');
+  return null;
 }
 ```
 
@@ -261,9 +269,9 @@ if (!pageHeadword.includes(normalizedWord)) {
 | 服务 | 用途 | URL |
 |------|------|-----|
 | DeepL API | 高质量翻译（优先） | `api-free.deepl.com` |
-| Cambridge Dictionary | 美式音标和释义 | `dictionary.cambridge.org` |
+| Merriam-Webster API | IPA 音标和释义 | `dictionaryapi.com` |
 | Google Translate | 句子翻译（备用） | `translate.googleapis.com` |
-| Web Speech API | 本地朗读 | 浏览器内置 |
+| Web Speech API | 本地朗读（无音频时回退） | 浏览器内置 |
 
 ---
 
@@ -273,8 +281,8 @@ if (!pageHeadword.includes(normalizedWord)) {
 |------|------|
 | `activeTab` | 访问当前标签页 |
 | `webNavigation` | 拦截 PDF 文件导航 |
-| `storage` | 存储 DeepL API 密钥 |
-| `host_permissions` | 访问 DeepL、Cambridge Dictionary 和 Google Translate |
+| `storage` | 存储 MW/DeepL API 密钥 |
+| `host_permissions` | 访问 DeepL、Merriam-Webster 和 Google Translate |
 
 ---
 
