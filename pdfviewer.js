@@ -387,34 +387,41 @@ viewer.addEventListener('dblclick', async (e) => {
     const selection = window.getSelection();
     const word = selection.toString().trim();
 
-    // 调试模式：显示选中的文本（无论是否是英文）
-    console.log('[Debug] 选中的文本:', JSON.stringify(word));
-
     hideAllPopups();
 
-    // 显示调试信息和加载状态
+    // 如果不是英文单词，直接返回
+    if (!word || !/^[a-zA-Z]+$/.test(word)) {
+        return;
+    }
+
+    // 显示加载状态（包含原单词）
     translatorPopup.style.display = 'block';
-    translatorPopup.querySelector('.translator-popup-content').innerHTML =
-        `<div style="margin-bottom:10px;padding:8px;background:#f0f0f0;border-radius:4px;font-size:12px;color:#333;">
-            <strong>调试：选中的文本</strong><br>
-            <code style="word-break:break-all">${word || '(空)'}</code>
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(word)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                <div class="translator-loading">正在查询...</div>
+            </div>
         </div>
-        <div class="translator-loading">正在查询...</div>`;
+    `;
 
     const pos = calculatePopupPosition(e.clientX, e.clientY, 350, 200);
     translatorPopup.style.left = pos.left + 'px';
     translatorPopup.style.top = pos.top + 'px';
 
-    // 如果不是英文单词，只显示调试信息
-    if (!word || !/^[a-zA-Z]+$/.test(word)) {
-        translatorPopup.querySelector('.translator-popup-content').innerHTML =
-            `<div style="margin-bottom:10px;padding:8px;background:#fff3cd;border-radius:4px;font-size:12px;color:#856404;">
-                <strong>调试信息</strong><br>
-                选中的文本：<code>${word || '(空)'}</code><br>
-                <em>不是有效的英文单词</em>
-            </div>`;
-        return;
-    }
+    // 绑定加载状态的按钮事件
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => {
+        speakText(word);
+    });
 
     try {
         const response = await chrome.runtime.sendMessage({
@@ -436,11 +443,11 @@ viewer.addEventListener('dblclick', async (e) => {
                 renderSimpleTranslation(word, translateResponse.data.translated);
                 speakText(word);
             } else {
-                renderError(response.error || '查询失败');
+                renderError(word, response.error || '查询失败');
             }
         }
     } catch (error) {
-        renderError('网络错误，请重试');
+        renderError(word, '网络错误，请重试');
     }
 });
 
@@ -537,10 +544,27 @@ function renderSimpleTranslation(word, translation) {
     translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => speakText(word));
 }
 
-// 渲染错误
-function renderError(message) {
-    translatorPopup.querySelector('.translator-popup-content').innerHTML =
-        `<div class="translator-error">❌ ${escapeHtml(message)}</div>`;
+// 渲染错误（显示原单词和错误提示）
+function renderError(word, message) {
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(word)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                <div class="translator-error">❌ ${escapeHtml(message)}</div>
+            </div>
+        </div>
+    `;
+
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => speakText(word));
 }
 
 // ==================== 选中文本悬浮按钮 ====================

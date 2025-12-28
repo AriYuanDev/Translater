@@ -114,28 +114,48 @@ async function fetchDictionary(word) {
 // 解析 Cambridge Dictionary HTML
 function parseCambridgeDictionary(html, word) {
   try {
-    // 提取英式音标 (UK)
-    const ukPhoneticMatch = html.match(/<span class="ipa dipa lpr-2 lpl-1">([^<]+)<\/span>/);
-    const ukPhonetic = ukPhoneticMatch ? `/${ukPhoneticMatch[1]}/` : '';
+    const normalizedWord = word.toLowerCase();
 
-    // 提取美式音标 (US) - 在 us dpron-i 区域查找
-    const usRegion = html.match(/<span class="us dpron-i[^"]*"[^>]*>([\s\S]*?)<\/span>\s*<\/div>/);
-    let usPhonetic = '';
-    if (usRegion) {
-      const usPhoneticMatch = usRegion[1].match(/<span class="ipa dipa lpr-2 lpl-1">([^<]+)<\/span>/);
-      usPhonetic = usPhoneticMatch ? `/${usPhoneticMatch[1]}/` : '';
+    // 验证页面确实包含我们查询的单词
+    // 检查页面标题或词条标题是否匹配
+    const headwordMatch = html.match(/<span class="hw dhw">([^<]+)<\/span>/);
+    const pageHeadword = headwordMatch ? headwordMatch[1].toLowerCase().trim() : '';
+
+    // 如果页面词条与查询词不匹配，返回 null（可能是被重定向到其他页面）
+    if (!pageHeadword || !pageHeadword.includes(normalizedWord.replace(/s$/, '')) && !normalizedWord.includes(pageHeadword)) {
+      console.log(`[词条不匹配] 查询: ${normalizedWord}, 页面: ${pageHeadword}`);
+      return null;
     }
 
-    // 如果没有找到美式音标，尝试另一种方式提取
+    // 辅助函数：从 IPA span 中提取音标（处理嵌套的 span 标签）
+    function extractPhonetic(ipaHtml) {
+      if (!ipaHtml) return '';
+      // 移除所有 HTML 标签，只保留文本
+      const text = ipaHtml.replace(/<[^>]+>/g, '').trim();
+      return text ? `/${text}/` : '';
+    }
+
+    // 提取英式音标 (UK) - 第一个匹配项（支持嵌套 span）
+    const ukPhoneticMatch = html.match(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/);
+    const ukPhonetic = ukPhoneticMatch ? extractPhonetic(ukPhoneticMatch[1]) : '';
+
+    // 提取美式音标 (US) - 查找 us dpron-i 区域
+    let usPhonetic = '';
+    const usRegion = html.match(/<span class="us dpron-i[^"]*"[^>]*>([\s\S]*?)<\/span>\s*<\/div>/);
+    if (usRegion) {
+      const usPhoneticMatch = usRegion[1].match(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/);
+      usPhonetic = usPhoneticMatch ? extractPhonetic(usPhoneticMatch[1]) : '';
+    }
+
+    // 如果没有找到美式音标，尝试从页面中找第二个 ipa 标签（通常是美式）
     if (!usPhonetic) {
-      // 查找包含 us_pron 音频附近的音标
-      const usAreaMatch = html.match(/us_pron[\s\S]*?<span class="ipa dipa lpr-2 lpl-1">([^<]+)<\/span>/);
-      if (usAreaMatch) {
-        usPhonetic = `/${usAreaMatch[1]}/`;
+      const allPhonetics = [...html.matchAll(/<span class="ipa dipa lpr-2 lpl-1">([\s\S]*?)<\/span>(?:<\/span>)?/g)];
+      if (allPhonetics.length >= 2) {
+        usPhonetic = extractPhonetic(allPhonetics[1][1]);
       }
     }
 
-    // 提取美式发音音频 URL（优先）
+    // 提取美式发音音频 URL
     const usAudioMatch = html.match(/<source[^>]+src="([^"]*us_pron[^"]*\.mp3)"/);
     const usAudioUrl = usAudioMatch ? `https://dictionary.cambridge.org${usAudioMatch[1]}` : '';
 

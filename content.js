@@ -167,16 +167,33 @@
         // 移除之前的弹窗
         removeAllPopups();
 
-        // 创建弹窗
+        // 创建弹窗 - 加载时显示原单词
         currentPopup = document.createElement('div');
         currentPopup.className = 'translator-popup';
         currentPopup.innerHTML = `
+      <button class="translator-close-btn" title="关闭">×</button>
       <div class="translator-popup-content">
-        <div class="translator-loading">正在查询...</div>
+        <div class="translator-word-header">
+          <div>
+            <span class="translator-word">${escapeHtml(word)}</span>
+          </div>
+          <button class="translator-speak-btn" title="朗读">
+            ${createSpeakerSVG()}
+          </button>
+        </div>
+        <div class="translator-meanings">
+          <div class="translator-loading">正在查询...</div>
+        </div>
       </div>
     `;
 
         document.body.appendChild(currentPopup);
+
+        // 绑定加载状态的按钮事件
+        currentPopup.querySelector('.translator-close-btn').addEventListener('click', removeAllPopups);
+        currentPopup.querySelector('.translator-speak-btn').addEventListener('click', () => {
+            speakText(word);
+        });
 
         // 计算位置
         const rect = currentPopup.getBoundingClientRect();
@@ -207,11 +224,11 @@
                     // 自动朗读单词
                     speakText(word);
                 } else {
-                    renderError(response.error || '查询失败');
+                    renderError(word, response.error || '查询失败');
                 }
             }
         } catch (error) {
-            renderError('网络错误，请重试');
+            renderError(word, '网络错误，请重试');
         }
     });
 
@@ -326,15 +343,31 @@
         });
     }
 
-    // 渲染错误信息
-    function renderError(message) {
+    // 渲染错误信息（显示原单词和错误提示）
+    function renderError(word, message) {
         if (!currentPopup) return;
 
         currentPopup.innerHTML = `
+      <button class="translator-close-btn" title="关闭">×</button>
       <div class="translator-popup-content">
-        <div class="translator-error">❌ ${escapeHtml(message)}</div>
+        <div class="translator-word-header">
+          <div>
+            <span class="translator-word">${escapeHtml(word)}</span>
+          </div>
+          <button class="translator-speak-btn" title="朗读">
+            ${createSpeakerSVG()}
+          </button>
+        </div>
+        <div class="translator-meanings">
+          <div class="translator-error">❌ ${escapeHtml(message)}</div>
+        </div>
       </div>
     `;
+
+        currentPopup.querySelector('.translator-close-btn').addEventListener('click', removeAllPopups);
+        currentPopup.querySelector('.translator-speak-btn').addEventListener('click', () => {
+            speakText(word);
+        });
     }
 
     // ==================== 选中文本悬浮按钮 ====================
