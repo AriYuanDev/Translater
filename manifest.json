@@ -8,7 +8,7 @@
     "webNavigation"
   ],
   "host_permissions": [
-    "https://api.dictionaryapi.dev/*",
+    "https://dictionary.cambridge.org/*",
     "https://translate.googleapis.com/*",
     "<all_urls>"
   ],

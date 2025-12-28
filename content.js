@@ -21,6 +21,13 @@
     </svg>`;
     }
 
+    // HTML 转义函数，防止 XSS 攻击
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // 使用 Web Speech API 朗读文本（本地实现）
     function speakText(text) {
         // 取消正在进行的朗读
@@ -64,10 +71,11 @@
     function autoSpeakWord(data, word) {
         let audioUrl = '';
 
-        // 尝试获取美式发音音频
+        // 尝试获取美式发音音频（优先使用 Cambridge 的 US 发音）
         if (data.phonetics && data.phonetics.length > 0) {
             for (const p of data.phonetics) {
-                if (p.audio && p.audio.includes('-us')) {
+                // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
+                if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
                     audioUrl = p.audio;
                     break;
                 }
@@ -201,10 +209,11 @@
         let phonetic = data.phonetic || '';
         let audioUrl = '';
 
-        // 尝试获取美式音标和音频
+        // 尝试获取美式音标和音频（兼容 Cambridge 和老 API）
         if (data.phonetics && data.phonetics.length > 0) {
             for (const p of data.phonetics) {
-                if (p.audio && p.audio.includes('-us')) {
+                // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
+                if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
                     audioUrl = p.audio;
                     if (p.text) phonetic = p.text;
                     break;
@@ -243,8 +252,8 @@
       <div class="translator-popup-content">
         <div class="translator-word-header">
           <div>
-            <span class="translator-word">${originalWord}</span>
-            <span class="translator-phonetic">${phonetic}</span>
+            <span class="translator-word">${escapeHtml(originalWord)}</span>
+            <span class="translator-phonetic">${escapeHtml(phonetic)}</span>
           </div>
           <button class="translator-speak-btn" title="朗读">
             ${createSpeakerSVG()}
@@ -285,7 +294,7 @@
       <div class="translator-popup-content">
         <div class="translator-word-header">
           <div>
-            <span class="translator-word">${word}</span>
+            <span class="translator-word">${escapeHtml(word)}</span>
           </div>
           <button class="translator-speak-btn" title="朗读">
             ${createSpeakerSVG()}
@@ -362,7 +371,12 @@
         }
 
         // 获取选区的位置
-        const range = selection.getRangeAt(0);
+        let range;
+        try {
+            range = selection.getRangeAt(0);
+        } catch (e) {
+            return; // 没有有效选区
+        }
         const rect = range.getBoundingClientRect();
 
         // 如果选区无效，返回
@@ -479,23 +493,29 @@
             });
 
             if (response.success) {
-                const contentEl = currentPopup.querySelector('.translator-sentence-content');
-                contentEl.innerHTML = `
-          <div class="translator-result">${response.data.translated}</div>
-        `;
+                const contentEl = currentPopup?.querySelector('.translator-sentence-content');
+                if (contentEl) {
+                    contentEl.innerHTML = `
+              <div class="translator-result">${escapeHtml(response.data.translated)}</div>
+            `;
 
-                // 重新计算位置
-                const newRect = currentPopup.getBoundingClientRect();
-                const newPos = calculatePopupPosition(pos.left, pos.top, newRect.width, newRect.height);
-                currentPopup.style.left = newPos.left + 'px';
-                currentPopup.style.top = newPos.top + 'px';
+                    // 重新计算位置
+                    const newRect = currentPopup.getBoundingClientRect();
+                    const newPos = calculatePopupPosition(pos.left, pos.top, newRect.width, newRect.height);
+                    currentPopup.style.left = newPos.left + 'px';
+                    currentPopup.style.top = newPos.top + 'px';
+                }
             } else {
-                const contentEl = currentPopup.querySelector('.translator-sentence-content');
-                contentEl.innerHTML = `<div class="translator-error">❌ ${response.error}</div>`;
+                const contentEl = currentPopup?.querySelector('.translator-sentence-content');
+                if (contentEl) {
+                    contentEl.innerHTML = `<div class="translator-error">❌ ${escapeHtml(response.error)}</div>`;
+                }
             }
         } catch (error) {
-            const contentEl = currentPopup.querySelector('.translator-sentence-content');
-            contentEl.innerHTML = `<div class="translator-error">❌ 网络错误，请重试</div>`;
+            const contentEl = currentPopup?.querySelector('.translator-sentence-content');
+            if (contentEl) {
+                contentEl.innerHTML = `<div class="translator-error">❌ 网络错误，请重试</div>`;
+            }
         }
     }
 
