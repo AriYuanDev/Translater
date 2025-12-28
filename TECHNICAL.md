@@ -23,8 +23,9 @@
 │         ▼                                   ▼               │
 │  ┌─────────────┐                ┌─────────────────────┐    │
 │  │ styles.css  │                │   外部 API 请求      │    │
-│  │  (样式文件)  │                │ - Cambridge Dict    │    │
-│  └─────────────┘                │ - Google Translate  │    │
+│  │  (样式文件)  │                │ - DeepL API         │    │
+│  └─────────────┘                │ - Cambridge Dict    │    │
+│                                 │ - Google Translate  │    │
 │                                 └─────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -36,9 +37,11 @@
 | 文件 | 类型 | 说明 |
 |------|------|------|
 | `manifest.json` | 配置 | 扩展清单，定义权限和资源 |
-| `background.js` | JS | Service Worker，处理 API 请求和词典缓存 |
+| `background.js` | JS | Service Worker，处理 API 请求、词典缓存、DeepL/Google 翻译 |
 | `content.js` | JS | 内容脚本，处理页面交互和 UI |
 | `styles.css` | CSS | 弹窗和按钮样式 |
+| `options.html` | HTML | 设置页面 UI |
+| `options.js` | JS | 设置页面逻辑，API 密钥管理 |
 | `pdfviewer.*` | 多种 | PDF 阅读器模块 |
 
 ---
@@ -52,7 +55,9 @@
 - 处理来自 content.js 的消息
 - 调用 Cambridge Dictionary 获取单词信息
 - **LRU 词典缓存**（100 词上限，30 分钟过期）
-- 调用 Google Translate 获取翻译
+- 调用 **DeepL API** 获取高质量翻译（优先）
+- 调用 Google Translate 作为备用翻译引擎
+- 管理 DeepL API 密钥存储
 - 拦截 PDF 文件并重定向到自定义阅读器
 
 #### 关键函数
@@ -71,8 +76,17 @@ function parseCambridgeDictionary(html, word)
 // 从 IPA span 中提取音标（处理嵌套标签）
 function extractPhonetic(ipaHtml)
 
-// 翻译文本
-async function translateText(text, targetLang)
+// DeepL API 密钥管理
+async function getDeepLApiKey()
+async function setDeepLApiKey(apiKey)
+
+// 语言代码转换
+function convertToDeepLLang(lang)
+
+// 翻译函数
+async function translateWithDeepL(text, targetLang, apiKey)
+async function translateWithGoogle(text, targetLang)
+async function translateText(text, targetLang)  // 主入口，自动选择引擎
 ```
 
 #### 词典缓存机制
@@ -246,8 +260,9 @@ if (!pageHeadword.includes(normalizedWord)) {
 
 | 服务 | 用途 | URL |
 |------|------|-----|
+| DeepL API | 高质量翻译（优先） | `api-free.deepl.com` |
 | Cambridge Dictionary | 美式音标和释义 | `dictionary.cambridge.org` |
-| Google Translate | 句子翻译 | `translate.googleapis.com` |
+| Google Translate | 句子翻译（备用） | `translate.googleapis.com` |
 | Web Speech API | 本地朗读 | 浏览器内置 |
 
 ---
@@ -258,7 +273,8 @@ if (!pageHeadword.includes(normalizedWord)) {
 |------|------|
 | `activeTab` | 访问当前标签页 |
 | `webNavigation` | 拦截 PDF 文件导航 |
-| `host_permissions` | 访问 Cambridge Dictionary 和 Google Translate |
+| `storage` | 存储 DeepL API 密钥 |
+| `host_permissions` | 访问 DeepL、Cambridge Dictionary 和 Google Translate |
 
 ---
 

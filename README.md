@@ -1,6 +1,6 @@
 # 快译 - Chrome 划词翻译扩展
 
-一个简洁高效的 Chrome 翻译插件，支持双击翻译单词、选中文本悬浮翻译和本地朗读功能。
+一个简洁高效的 Chrome 翻译插件，支持双击翻译单词、选中文本悬浮翻译和本地朗读功能。**支持 DeepL 高质量翻译引擎**。
 
 ## ✨ 功能特性
 
@@ -20,7 +20,13 @@
 - 美式英语发音
 - 无需任何网络连接
 
-### 4. PDF 支持
+### 4. DeepL 高质量翻译
+- 支持配置 DeepL API 密钥
+- 翻译质量显著优于 Google 翻译
+- 免费版每月 50 万字符
+- 失败时自动回退到 Google 翻译
+
+### 5. PDF 支持
 - 自动检测 PDF 文件并使用内置阅读器打开
 - 支持在 PDF 中使用划词翻译功能
 
@@ -55,9 +61,11 @@
 ```
 Translater/
 ├── manifest.json      # 扩展配置文件
-├── background.js      # 后台服务（API 请求）
+├── background.js      # 后台服务（API 请求、DeepL/Google 翻译）
 ├── content.js         # 内容脚本（UI 交互）
 ├── styles.css         # UI 样式
+├── options.html       # 设置页面
+├── options.js         # 设置页面脚本
 ├── pdfviewer.*        # PDF 阅读器模块
 ├── icons/             # 图标文件
 ├── TECHNICAL.md       # 技术手册
@@ -69,7 +77,7 @@ Translater/
 | 功能 | 技术方案 | 网络需求 |
 |------|---------|---------| 
 | 单词翻译 | Cambridge Dictionary | 需要 |
-| 句子翻译 | Google Translate | 需要 |
+| 句子翻译 | **DeepL API**（优先）/ Google Translate（备用） | 需要 |
 | 朗读 (TTS) | Web Speech API | **本地** |
 | 音标显示 | Cambridge Dictionary 美式 IPA | 需要 |
 | 单词发音 | Cambridge Dictionary 原生音频 | 需要 |
@@ -82,6 +90,12 @@ Translater/
 4. 部分网站可能禁用内容脚本注入
 
 ## 📝 更新日志
+
+### v1.2.0 (2025-12-28)
+- ✨ 新增 **DeepL 翻译引擎**支持，翻译质量大幅提升
+- ⚙️ 新增**设置页面**，支持配置 DeepL API 密钥
+- 🔄 智能回退机制：DeepL 失败时自动使用 Google 翻译
+- 🌐 支持多语言翻译（中、英、日、韩、德、法等）
 
 ### v1.1.0 (2025-12-28)
 - 🔄 切换到 **Cambridge Dictionary** 作为词典数据源

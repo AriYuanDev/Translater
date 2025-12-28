@@ -76,6 +76,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
+
+  // DeepL API 密钥管理
+  if (request.action === 'setDeepLApiKey') {
+    setDeepLApiKey(request.apiKey)
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'getDeepLApiKey') {
+    getDeepLApiKey()
+      .then(apiKey => sendResponse({ success: true, apiKey: apiKey ? '已配置' : '' }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'getTranslationEngine') {
+    getDeepLApiKey()
+      .then(apiKey => sendResponse({ success: true, engine: apiKey ? 'DeepL' : 'Google' }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
 
 // 获取词典数据 - 从 Cambridge Dictionary 获取（带缓存）
@@ -229,8 +251,89 @@ function parseCambridgeDictionary(html, word) {
   }
 }
 
-// 翻译文本
-async function translateText(text, targetLang) {
+// ==================== DeepL API 配置 ====================
+
+// 获取存储的 DeepL API 密钥
+async function getDeepLApiKey() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['deepLApiKey'], (result) => {
+      resolve(result.deepLApiKey || '');
+    });
+  });
+}
+
+// 保存 DeepL API 密钥
+async function setDeepLApiKey(apiKey) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ deepLApiKey: apiKey }, () => {
+      resolve(true);
+    });
+  });
+}
+
+// 语言代码转换（Chrome 语言代码 -> DeepL 语言代码）
+function convertToDeepLLang(lang) {
+  const langMap = {
+    'zh-CN': 'ZH',
+    'zh-TW': 'ZH',
+    'zh': 'ZH',
+    'en': 'EN',
+    'en-US': 'EN-US',
+    'en-GB': 'EN-GB',
+    'ja': 'JA',
+    'ko': 'KO',
+    'de': 'DE',
+    'fr': 'FR',
+    'es': 'ES',
+    'it': 'IT',
+    'pt': 'PT-PT',
+    'pt-BR': 'PT-BR',
+    'ru': 'RU',
+    'pl': 'PL',
+    'nl': 'NL'
+  };
+  return langMap[lang] || lang.toUpperCase().split('-')[0];
+}
+
+// 使用 DeepL 翻译文本
+async function translateWithDeepL(text, targetLang, apiKey) {
+  const deepLLang = convertToDeepLLang(targetLang);
+  const url = 'https://api-free.deepl.com/v2/translate';
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `DeepL-Auth-Key ${apiKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      text: text,
+      target_lang: deepLLang
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('DeepL API 错误:', response.status, errorData);
+    throw new Error(`DeepL 翻译失败: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (data.translations && data.translations.length > 0) {
+    return {
+      original: text,
+      translated: data.translations[0].text,
+      sourceLang: data.translations[0].detected_source_language || 'auto',
+      engine: 'DeepL'
+    };
+  }
+
+  throw new Error('DeepL 返回数据格式错误');
+}
+
+// 使用 Google 翻译文本（备用）
+async function translateWithGoogle(text, targetLang) {
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
 
   const response = await fetch(url);
@@ -241,7 +344,6 @@ async function translateText(text, targetLang) {
 
   const data = await response.json();
 
-  // 解析 Google 翻译返回的数据格式
   let translatedText = '';
   if (data && data[0]) {
     for (const item of data[0]) {
@@ -254,8 +356,28 @@ async function translateText(text, targetLang) {
   return {
     original: text,
     translated: translatedText,
-    sourceLang: data[2] || 'auto'
+    sourceLang: data[2] || 'auto',
+    engine: 'Google'
   };
+}
+
+// 翻译文本（优先使用 DeepL，失败时回退到 Google）
+async function translateText(text, targetLang) {
+  const apiKey = await getDeepLApiKey();
+
+  if (apiKey) {
+    try {
+      console.log('[翻译] 使用 DeepL 引擎');
+      return await translateWithDeepL(text, targetLang, apiKey);
+    } catch (error) {
+      console.warn('[翻译] DeepL 失败，回退到 Google:', error.message);
+      // DeepL 失败时回退到 Google
+    }
+  } else {
+    console.log('[翻译] 未配置 DeepL API，使用 Google 引擎');
+  }
+
+  return await translateWithGoogle(text, targetLang);
 }
 
 // 扩展安装或更新时的处理
