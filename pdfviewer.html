@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快译 PDF 阅读器</title>
+    <link rel="stylesheet" href="pdfviewer.css">
+    <script src="pdf.min.mjs" type="module"></script>
+</head>
+
+<body>
+    <div class="pdf-toolbar">
+        <div class="toolbar-left">
+            <button id="prevPage" class="toolbar-btn" title="上一页">
+                <svg viewBox="0 0 24 24">
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                </svg>
+            </button>
+            <span class="page-info">
+                <input type="number" id="currentPage" min="1" value="1"> / <span id="totalPages">1</span>
+            </span>
+            <button id="nextPage" class="toolbar-btn" title="下一页">
+                <svg viewBox="0 0 24 24">
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                </svg>
+            </button>
+        </div>
+        <div class="toolbar-center">
+            <button id="zoomOut" class="toolbar-btn" title="缩小">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 13H5v-2h14v2z" />
+                </svg>
+            </button>
+            <span id="zoomLevel" class="zoom-level">100%</span>
+            <button id="zoomIn" class="toolbar-btn" title="放大">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                </svg>
+            </button>
+            <button id="fitWidth" class="toolbar-btn" title="适应宽度">
+                <svg viewBox="0 0 24 24">
+                    <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" />
+                </svg>
+            </button>
+        </div>
+        <div class="toolbar-right">
+            <span id="pdfTitle" class="pdf-title">加载中...</span>
+        </div>
+    </div>
+
+    <div id="viewerContainer" class="viewer-container">
+        <div id="viewer" class="pdf-viewer"></div>
+    </div>
+
+    <!-- 翻译弹窗模板 -->
+    <div id="translatorPopup" class="translator-popup" style="display: none;">
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-loading">正在查询...</div>
+        </div>
+    </div>
+
+    <!-- 悬浮按钮 -->
+    <div id="floatButtons" class="translator-float-buttons" style="display: none;">
+        <button class="translator-float-btn translate-btn" data-tooltip="翻译">译</button>
+        <button class="translator-float-btn speak-btn" data-tooltip="朗读">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
+        </button>
+    </div>
+
+    <script type="module" src="pdfviewer.js"></script>
+</body>
+
+</html>
