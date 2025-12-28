@@ -295,6 +295,14 @@ function createSpeakerSVG() {
     </svg>`;
 }
 
+// HTML 转义函数，防止 XSS 攻击
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // 使用 Web Speech API 朗读
 function speakText(text) {
     window.speechSynthesis.cancel();
@@ -329,7 +337,8 @@ function autoSpeakWord(data, word) {
 
     if (data.phonetics && data.phonetics.length > 0) {
         for (const p of data.phonetics) {
-            if (p.audio && p.audio.includes('-us')) {
+            // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
+            if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
                 audioUrl = p.audio;
                 break;
             }
@@ -442,7 +451,8 @@ function renderWordPopup(data, originalWord) {
 
     if (data.phonetics && data.phonetics.length > 0) {
         for (const p of data.phonetics) {
-            if (p.audio && p.audio.includes('-us')) {
+            // 优先选择美式发音（Cambridge 用 us_pron，老 API 用 -us）
+            if (p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us'))) {
                 audioUrl = p.audio;
                 if (p.text) phonetic = p.text;
                 break;
@@ -459,16 +469,16 @@ function renderWordPopup(data, originalWord) {
             const definitions = meaning.definitions.slice(0, 2);
 
             let defsHtml = definitions.map(def => {
-                let html = `<div class="translator-definition">${def.definition}</div>`;
+                let html = `<div class="translator-definition">${escapeHtml(def.definition)}</div>`;
                 if (def.example) {
-                    html += `<div class="translator-example">"${def.example}"</div>`;
+                    html += `<div class="translator-example">"${escapeHtml(def.example)}"</div>`;
                 }
                 return html;
             }).join('');
 
             meaningsHtml += `
                 <div class="translator-meaning-item">
-                    <span class="translator-pos">${pos}</span>
+                    <span class="translator-pos">${escapeHtml(pos)}</span>
                     ${defsHtml}
                 </div>
             `;
@@ -480,8 +490,8 @@ function renderWordPopup(data, originalWord) {
         <div class="translator-popup-content">
             <div class="translator-word-header">
                 <div>
-                    <span class="translator-word">${originalWord}</span>
-                    <span class="translator-phonetic">${phonetic}</span>
+                    <span class="translator-word">${escapeHtml(originalWord)}</span>
+                    <span class="translator-phonetic">${escapeHtml(phonetic)}</span>
                 </div>
                 <button class="translator-speak-btn" title="朗读">
                     ${createSpeakerSVG()}
@@ -511,14 +521,14 @@ function renderSimpleTranslation(word, translation) {
         <div class="translator-popup-content">
             <div class="translator-word-header">
                 <div>
-                    <span class="translator-word">${word}</span>
+                    <span class="translator-word">${escapeHtml(word)}</span>
                 </div>
                 <button class="translator-speak-btn" title="朗读">
                     ${createSpeakerSVG()}
                 </button>
             </div>
             <div class="translator-meanings">
-                <div class="translator-translation">${translation}</div>
+                <div class="translator-translation">${escapeHtml(translation)}</div>
             </div>
         </div>
     `;
@@ -530,7 +540,7 @@ function renderSimpleTranslation(word, translation) {
 // 渲染错误
 function renderError(message) {
     translatorPopup.querySelector('.translator-popup-content').innerHTML =
-        `<div class="translator-error">❌ ${message}</div>`;
+        `<div class="translator-error">❌ ${escapeHtml(message)}</div>`;
 }
 
 // ==================== 选中文本悬浮按钮 ====================
@@ -639,10 +649,10 @@ async function translateSelection(text, x, y) {
 
         if (response.success) {
             sentencePopup.querySelector('.translator-sentence-content').innerHTML =
-                `<div class="translator-result">${response.data.translated}</div>`;
+                `<div class="translator-result">${escapeHtml(response.data.translated)}</div>`;
         } else {
             sentencePopup.querySelector('.translator-sentence-content').innerHTML =
-                `<div class="translator-error">❌ ${response.error}</div>`;
+                `<div class="translator-error">❌ ${escapeHtml(response.error)}</div>`;
         }
     } catch (error) {
         sentencePopup.querySelector('.translator-sentence-content').innerHTML =
@@ -695,7 +705,7 @@ function showError(message) {
     viewer.innerHTML = `
         <div class="error-container">
             <div class="error-icon">📄</div>
-            <div class="error-message">${message}</div>
+            <div class="error-message">${escapeHtml(message)}</div>
             <button class="error-retry-btn" id="retryBtn">重试</button>
         </div>
     `;

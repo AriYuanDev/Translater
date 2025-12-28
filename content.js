@@ -231,16 +231,16 @@
                 const definitions = meaning.definitions.slice(0, 2); // 每个词性最多2个定义
 
                 let defsHtml = definitions.map(def => {
-                    let html = `<div class="translator-definition">${def.definition}</div>`;
+                    let html = `<div class="translator-definition">${escapeHtml(def.definition)}</div>`;
                     if (def.example) {
-                        html += `<div class="translator-example">"${def.example}"</div>`;
+                        html += `<div class="translator-example">"${escapeHtml(def.example)}"</div>`;
                     }
                     return html;
                 }).join('');
 
                 meaningsHtml += `
           <div class="translator-meaning-item">
-            <span class="translator-pos">${pos}</span>
+            <span class="translator-pos">${escapeHtml(pos)}</span>
             ${defsHtml}
           </div>
         `;
@@ -301,7 +301,7 @@
           </button>
         </div>
         <div class="translator-meanings">
-          <div class="translator-translation">${translation}</div>
+          <div class="translator-translation">${escapeHtml(translation)}</div>
         </div>
       </div>
     `;
@@ -318,7 +318,7 @@
 
         currentPopup.innerHTML = `
       <div class="translator-popup-content">
-        <div class="translator-error">❌ ${message}</div>
+        <div class="translator-error">❌ ${escapeHtml(message)}</div>
       </div>
     `;
     }
