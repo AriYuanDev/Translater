@@ -16,9 +16,10 @@
 - **【🔊】按钮**：悬停即可使用 TTS 朗读选中内容
 
 ### 3. 本地朗读 (无需网络)
-- 使用 Web Speech API 实现本地 TTS
+- 使用 **Web Speech API** 实现本地朗读
+- 支持 **Piper TTS** 扩展（安装后自动使用高质量 AI 语音）
 - 美式英语发音
-- 无需任何网络连接
+- 无需网络连接
 
 ### 4. DeepL 高质量翻译
 - 支持配置 DeepL API 密钥
@@ -78,7 +79,7 @@ Translater/
 |------|---------|---------| 
 | 单词翻译 | Cambridge Dictionary | 需要 |
 | 句子翻译 | **DeepL API**（优先）/ Google Translate（备用） | 需要 |
-| 朗读 (TTS) | Web Speech API | **本地** |
+| 朗读 (TTS) | Web Speech API / **Piper AI TTS** | **本地** |
 | 音标显示 | Cambridge Dictionary 美式 IPA | 需要 |
 | 单词发音 | Cambridge Dictionary 原生音频 | 需要 |
 
@@ -90,6 +91,10 @@ Translater/
 4. 部分网站可能禁用内容脚本注入
 
 ## 📝 更新日志
+
+### v1.2.1 (2025-12-30)
+- 🔊 优化 TTS 语音选择，**自动优先使用 Piper 高质量语音**
+- 🛠️ 新增 dictionaryapi.com 权限支持
 
 ### v1.2.0 (2025-12-28)
 - ✨ 新增 **DeepL 翻译引擎**支持，翻译质量大幅提升

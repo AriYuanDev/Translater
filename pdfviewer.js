@@ -303,7 +303,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 使用 Web Speech API 朗读
+// 使用 TTS 朗读（优先 Piper 高质量语音）
 function speakText(text) {
     window.speechSynthesis.cancel();
 
@@ -312,10 +312,15 @@ function speakText(text) {
     utterance.rate = 0.9;
 
     const voices = window.speechSynthesis.getVoices();
-    const usVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
+    // 优先 Piper 语音，其次 Samantha，最后任意美式英语
+    const usVoice = voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
+        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
         || voices.find(v => v.lang === 'en-US');
 
-    if (usVoice) utterance.voice = usVoice;
+    if (usVoice) {
+        utterance.voice = usVoice;
+        console.log('[TTS] 使用语音:', usVoice.name);
+    }
     window.speechSynthesis.speak(utterance);
 }
 

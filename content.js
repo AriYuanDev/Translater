@@ -36,9 +36,8 @@
             .replace(/'/g, '&#039;');
     }
 
-    // 使用 Web Speech API 朗读文本（本地实现）
+    // 使用 TTS 朗读文本（Web Speech API）
     function speakText(text) {
-        // 取消正在进行的朗读
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -54,13 +53,23 @@
         window.speechSynthesis.speak(utterance);
     }
 
-    // 加载并缓存语音列表
+    // 加载并缓存语音列表（优先使用 Piper 高质量语音）
     function loadVoices() {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0 && !voicesLoaded) {
+            // 优先查找 Piper 英语语音
             cachedUSVoice = voices.find(voice =>
-                voice.lang === 'en-US' && voice.name.includes('Samantha')
-            ) || voices.find(voice => voice.lang === 'en-US');
+                voice.name.includes('Piper') && voice.lang.startsWith('en')
+            ) ||
+                // 其次查找系统美式英语语音
+                voices.find(voice =>
+                    voice.lang === 'en-US' && voice.name.includes('Samantha')
+                ) ||
+                voices.find(voice => voice.lang === 'en-US');
+
+            if (cachedUSVoice) {
+                console.log('[TTS] 使用语音:', cachedUSVoice.name);
+            }
             voicesLoaded = true;
         }
     }
