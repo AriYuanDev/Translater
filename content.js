@@ -53,15 +53,19 @@
         window.speechSynthesis.speak(utterance);
     }
 
-    // 加载并缓存语音列表（优先使用 Piper 高质量语音）
+    // 加载并缓存语音列表（优先使用 Piper p5712 高质量语音）
     function loadVoices() {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0 && !voicesLoaded) {
-            // 优先查找 Piper 英语语音
+            // 优先查找 Piper p5712 语音（libritts 高质量英语语音）
             cachedUSVoice = voices.find(voice =>
-                voice.name.includes('Piper') && voice.lang.startsWith('en')
+                voice.name.includes('p5712') && voice.lang.startsWith('en')
             ) ||
-                // 其次查找系统美式英语语音
+                // 其次查找其他 Piper 英语语音
+                voices.find(voice =>
+                    voice.name.includes('Piper') && voice.lang.startsWith('en')
+                ) ||
+                // 再次查找系统美式英语语音
                 voices.find(voice =>
                     voice.lang === 'en-US' && voice.name.includes('Samantha')
                 ) ||

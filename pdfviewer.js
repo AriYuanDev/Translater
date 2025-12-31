@@ -303,7 +303,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 使用 TTS 朗读（优先 Piper 高质量语音）
+// 使用 TTS 朗读（优先 Piper p5712 高质量语音）
 function speakText(text) {
     window.speechSynthesis.cancel();
 
@@ -312,8 +312,9 @@ function speakText(text) {
     utterance.rate = 0.9;
 
     const voices = window.speechSynthesis.getVoices();
-    // 优先 Piper 语音，其次 Samantha，最后任意美式英语
-    const usVoice = voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
+    // 优先 p8699 语音（libritts 高质量英语语音），其次其他 Piper 语音，再次 Samantha，最后任意美式英语
+    const usVoice = voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
+        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
         || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
         || voices.find(v => v.lang === 'en-US');
 
