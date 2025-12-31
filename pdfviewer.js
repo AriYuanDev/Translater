@@ -607,13 +607,34 @@ function handleTextSelection(e) {
     // 显示悬浮按钮
     floatButtons.style.display = 'flex';
 
-    let left = e.clientX + 10;
-    let top = e.clientY - 20;
+    // 获取按钮容器尺寸
+    const btnRect = floatButtons.getBoundingClientRect();
+    const gap = 30;  // 两个按钮之间的间距（鼠标在中间）
 
-    if (left + 80 > window.innerWidth - 10) {
-        left = e.clientX - 90;
+    // 设置 gap 使两个按钮分开
+    floatButtons.style.gap = gap + 'px';
+
+    // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
+    const btnWidth = 32;  // 单个按钮宽度
+    const containerWidth = btnWidth * 2 + gap;
+    let left = e.clientX - btnWidth - gap / 2;  // 左边按钮从鼠标左侧开始
+    let top = e.clientY - btnWidth / 2;  // 垂直居中于鼠标
+
+    // 防止超出左边界
+    if (left < 10) {
+        left = 10;
     }
-    if (top < 60) top = 60;
+
+    // 防止超出右边界
+    if (left + containerWidth > window.innerWidth - 10) {
+        left = window.innerWidth - containerWidth - 10;
+    }
+
+    // 防止超出上下边界
+    if (top < 60) top = 60;  // 避开工具栏
+    if (top + btnWidth > window.innerHeight - 10) {
+        top = window.innerHeight - btnWidth - 10;
+    }
 
     floatButtons.style.left = left + 'px';
     floatButtons.style.top = top + 'px';

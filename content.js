@@ -447,43 +447,53 @@
             return;
         }
 
-        // 创建悬浮按钮
+        // 创建悬浮按钮容器
         currentFloatButtons = document.createElement('div');
         currentFloatButtons.className = 'translator-float-buttons';
         currentFloatButtons.innerHTML = `
-      <button class="translator-float-btn translate-btn" data-tooltip="翻译">译</button>
       <button class="translator-float-btn speak-btn" data-tooltip="朗读">
         ${createSpeakerSVG()}
       </button>
+      <button class="translator-float-btn translate-btn" data-tooltip="翻译">译</button>
     `;
 
         document.body.appendChild(currentFloatButtons);
 
-        // 计算位置 - 悬浮按钮显示在鼠标位置旁边
-        const buttonRect = currentFloatButtons.getBoundingClientRect();
-        let left = e.clientX + 10;  // 鼠标右侧 10px
-        let top = e.clientY - buttonRect.height / 2;  // 垂直居中于鼠标
+        // 获取单个按钮的尺寸
+        const speakBtn = currentFloatButtons.querySelector('.speak-btn');
+        const translateBtn = currentFloatButtons.querySelector('.translate-btn');
+        const btnRect = speakBtn.getBoundingClientRect();
+        const btnWidth = btnRect.width;
+        const btnHeight = btnRect.height;
 
-        // 防止超出右边界
-        if (left + buttonRect.width > window.innerWidth - 10) {
-            left = e.clientX - buttonRect.width - 10;  // 改到鼠标左侧
-        }
+        // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
+        const gap = 30;  // 两个按钮之间的间距（鼠标在中间）
+        const containerWidth = btnWidth * 2 + gap;
+        let left = e.clientX - btnWidth - gap / 2;  // 左边按钮从鼠标左侧开始
+        let top = e.clientY - btnHeight / 2;  // 垂直居中于鼠标
 
         // 防止超出左边界
         if (left < 10) {
             left = 10;
         }
 
+        // 防止超出右边界
+        if (left + containerWidth > window.innerWidth - 10) {
+            left = window.innerWidth - containerWidth - 10;
+        }
+
         // 防止超出上下边界
         if (top < 10) {
             top = 10;
         }
-        if (top + buttonRect.height > window.innerHeight - 10) {
-            top = window.innerHeight - buttonRect.height - 10;
+        if (top + btnHeight > window.innerHeight - 10) {
+            top = window.innerHeight - btnHeight - 10;
         }
 
+        // 设置容器使用 flexbox 布局，中间留出间隙
         currentFloatButtons.style.left = left + 'px';
         currentFloatButtons.style.top = top + 'px';
+        currentFloatButtons.style.gap = gap + 'px';
 
         // 保存选中的文本，供按钮使用
         const selectedText = text;
@@ -491,13 +501,11 @@
         const mouseY = e.clientY;
 
         // 翻译按钮 - 鼠标悬停自动触发
-        const translateBtn = currentFloatButtons.querySelector('.translate-btn');
         translateBtn.addEventListener('mouseenter', async () => {
             await translateSelection(selectedText, mouseX, mouseY);
         });
 
         // 朗读按钮 - 鼠标悬停自动触发
-        const speakBtn = currentFloatButtons.querySelector('.speak-btn');
         speakBtn.addEventListener('mouseenter', () => {
             speakText(selectedText);
         });
