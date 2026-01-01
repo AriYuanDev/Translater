@@ -158,6 +158,9 @@ async function renderPage(pageNum) {
 
     console.log(`[Debug] 开始手动创建文本层: ${items.length} 个文本项`);
 
+    // 存储需要调整宽度的 span
+    const spansToAdjust = [];
+
     for (const item of items) {
         if (!item.str || item.str.trim() === '') continue;
 
@@ -183,6 +186,7 @@ async function renderPage(pageNum) {
         span.style.whiteSpace = 'pre';
         span.style.pointerEvents = 'all';
         span.style.transformOrigin = '0% 0%';
+        span.style.lineHeight = '1';
 
         // 计算旋转
         const angle = Math.atan2(tx[1], tx[0]);
@@ -190,12 +194,30 @@ async function renderPage(pageNum) {
             span.style.transform = `rotate(${angle}rad)`;
         }
 
-        // 设置宽度匹配 PDF 文本
-        if (item.width > 0) {
-            span.style.width = `${item.width * viewport.scale}px`;
-        }
-
         textLayerDiv.appendChild(span);
+
+        // 如果有宽度信息，记录下来稍后调整
+        if (item.width > 0) {
+            spansToAdjust.push({
+                span: span,
+                targetWidth: item.width * viewport.scale,
+                angle: angle
+            });
+        }
+    }
+
+    // 第二遍：测量实际宽度并应用 scaleX 变换来精确匹配
+    for (const { span, targetWidth, angle } of spansToAdjust) {
+        const naturalWidth = span.offsetWidth;
+        if (naturalWidth > 0 && Math.abs(targetWidth - naturalWidth) > 0.5) {
+            const scaleX = targetWidth / naturalWidth;
+            // 需要保留旋转变换
+            if (Math.abs(angle) > 0.001) {
+                span.style.transform = `rotate(${angle}rad) scaleX(${scaleX})`;
+            } else {
+                span.style.transform = `scaleX(${scaleX})`;
+            }
+        }
     }
 
     console.log(`[Debug] 文本层创建完成，共 ${textLayerDiv.children.length} 个 spans`);
