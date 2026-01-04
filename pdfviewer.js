@@ -317,6 +317,11 @@ function createSpeakerSVG() {
     </svg>`;
 }
 
+// 检测文本是否包含英文字母
+function containsEnglish(text) {
+    return /[a-zA-Z]/.test(text);
+}
+
 // HTML 转义函数，防止 XSS 攻击
 function escapeHtml(text) {
     if (!text) return '';
@@ -625,6 +630,9 @@ function handleTextSelection(e) {
 
     // 单个英文单词由双击处理
     if (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) return;
+
+    // 只有选中的文本包含英文时才显示悬浮按钮
+    if (!containsEnglish(text)) return;
 
     // 显示悬浮按钮
     floatButtons.style.display = 'flex';
