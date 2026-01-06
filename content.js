@@ -465,6 +465,7 @@
         ${createSpeakerSVG()}
       </button>
       <button class="translator-float-btn translate-btn" data-tooltip="翻译">译</button>
+      <button class="translator-float-btn close-floating-btn" data-tooltip="关闭">×</button>
     `;
 
         document.body.appendChild(currentFloatButtons);
@@ -478,7 +479,9 @@
 
         // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
         const gap = 30;  // 两个按钮之间的间距（鼠标在中间）
-        const containerWidth = btnWidth * 2 + gap;
+        // 现在是三个按钮：[朗读] [鼠标] [翻译] [关闭]
+        // 但设计上我们保持 朗读/翻译 在鼠标两侧，关闭按钮放在翻译按钮右侧
+        const containerWidth = btnWidth * 3 + gap + 6; // 6px 是按钮间的 gap
         let left = e.clientX - btnWidth - gap / 2;  // 左边按钮从鼠标左侧开始
         let top = e.clientY - btnHeight / 2;  // 垂直居中于鼠标
 
@@ -518,6 +521,12 @@
         // 朗读按钮 - 鼠标悬停自动触发
         speakBtn.addEventListener('mouseenter', () => {
             speakText(selectedText);
+        });
+
+        // 关闭按钮
+        currentFloatButtons.querySelector('.close-floating-btn').addEventListener('click', (e) => {
+            e.stopPropagation(); // 防止触发 window 的 click
+            removeFloatButtons();
         });
 
         // 鼠标移出悬浮按钮容器后延迟隐藏

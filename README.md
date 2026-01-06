@@ -6,9 +6,9 @@
 
 ### 1. 双击翻译单词
 - 双击任意英文单词，立即显示翻译弹窗
-- 显示 **Cambridge Dictionary 美式音标**（如 `/heˈloʊ/`）
+- 显示 **Merriam-Webster 美式音标**（如 `/heˈloʊ/`）
 - 支持词性、释义展示
-- 自动播放单词发音（使用 Cambridge 原生音频）
+- 自动播放单词发音（使用 Merriam-Webster 原生音频）
 
 ### 2. 选中文本悬浮按钮
 - 鼠标选中任意文本后，两侧出现悬浮按钮
@@ -43,7 +43,7 @@
 
 ### 翻译单词
 1. 在任意网页上**双击**一个英文单词
-2. 弹窗显示单词释义、Cambridge 美式音标
+2. 弹窗显示单词释义、Merriam-Webster 美式音标
 3. 单词会自动朗读
 4. 点击弹窗右上角的 🔊 按钮可重新朗读
 
@@ -77,11 +77,11 @@ Translater/
 
 | 功能 | 技术方案 | 网络需求 |
 |------|---------|---------| 
-| 单词翻译 | Cambridge Dictionary | 需要 |
+| 单词翻译 | Merriam-Webster Dictionary | 需要 |
 | 句子翻译 | **DeepL API**（优先）/ Google Translate（备用） | 需要 |
 | 朗读 (TTS) | Web Speech API / **Piper AI TTS** | **本地** |
-| 音标显示 | Cambridge Dictionary 美式 IPA | 需要 |
-| 单词发音 | Cambridge Dictionary 原生音频 | 需要 |
+| 音标显示 | Merriam-Webster 美式 IPA | 需要 |
+| 单词发音 | Merriam-Webster 原生音频 | 需要 |
 
 ## ⚠️ 注意事项
 
@@ -108,7 +108,7 @@ Translater/
 - 🌐 支持多语言翻译（中、英、日、韩、德、法等）
 
 ### v1.1.0 (2025-12-28)
-- 🔄 切换到 **Cambridge Dictionary** 作为词典数据源
+- 🔄 切换到 **Merriam-Webster Dictionary** 作为词典数据源
 - 🇺🇸 优先显示**美式音标**和**美式发音**
 - 🛡️ 添加 **XSS 安全防护**
 - 🐛 修复释义解析问题

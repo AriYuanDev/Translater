@@ -67,24 +67,47 @@ async function calculateFitWidth() {
     updateZoomLevel();
 }
 
-// 渲染所有页面
+// 渲染所有页面（懒加载：先占位，后渲染）
 async function renderAllPages() {
     viewer.innerHTML = '';
     renderedPages.clear();
 
+    // 创建 IntersectionObserver
+    const observerOptions = {
+        root: viewerContainer,
+        rootMargin: '200px', // 提前 200px 开始渲染
+        threshold: 0
+    };
+
+    const intersectionObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const pageContainer = entry.target;
+                const pageNum = parseInt(pageContainer.dataset.pageNum);
+
+                // 只有当页面尚未渲染内容时才渲染
+                if (!pageContainer.dataset.rendered) {
+                    renderPageContent(pageNum, pageContainer);
+                    pageContainer.dataset.rendered = 'true';
+                }
+
+                // 停止观察已进入视口的元素（可选：如果需要回收内存，可以不停止观察，在离开视口时清空内容）
+                observer.unobserve(pageContainer);
+            }
+        });
+    }, observerOptions);
+
+    // 预先获取页面尺寸信息并创建占位元素
+    // 注意：获取 viewport 比较快，render 比较慢
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        await renderPage(pageNum);
+        await createPagePlaceholder(pageNum, intersectionObserver);
     }
 }
 
-// 渲染单个页面
-async function renderPage(pageNum) {
-    console.log(`[Debug] 开始渲染页面 ${pageNum}`);
-
+// 创建页面占位符
+async function createPagePlaceholder(pageNum, observer) {
     const page = await pdfDoc.getPage(pageNum);
     const viewport = page.getViewport({ scale: currentScale });
-
-    console.log(`[Debug] viewport: width=${viewport.width}, height=${viewport.height}, scale=${viewport.scale}`);
 
     // 创建页面容器
     const pageContainer = document.createElement('div');
@@ -93,142 +116,142 @@ async function renderPage(pageNum) {
     pageContainer.style.width = viewport.width + 'px';
     pageContainer.style.height = viewport.height + 'px';
 
-    // 创建 canvas
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.width = viewport.width * window.devicePixelRatio;
-    canvas.height = viewport.height * window.devicePixelRatio;
-    canvas.style.width = viewport.width + 'px';
-    canvas.style.height = viewport.height + 'px';
-    context.scale(window.devicePixelRatio, window.devicePixelRatio);
+    // 添加加载 Loading 效果
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'page-loading';
+    loadingDiv.textContent = `Loading Page ${pageNum}...`;
+    loadingDiv.style.display = 'flex';
+    loadingDiv.style.alignItems = 'center';
+    loadingDiv.style.justifyContent = 'center';
+    loadingDiv.style.height = '100%';
+    loadingDiv.style.color = '#888';
 
-    pageContainer.appendChild(canvas);
-
-    // 创建文本层
-    const textLayerDiv = document.createElement('div');
-    textLayerDiv.className = 'textLayer';
-    textLayerDiv.style.width = viewport.width + 'px';
-    textLayerDiv.style.height = viewport.height + 'px';
-    // PDF.js 4.x 需要设置 --scale-factor CSS 变量
-    textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
-    pageContainer.appendChild(textLayerDiv);
-
+    pageContainer.appendChild(loadingDiv);
     viewer.appendChild(pageContainer);
 
-    // 渲染页面内容到 canvas
-    await page.render({
-        canvasContext: context,
-        viewport: viewport
-    }).promise;
-
-    console.log(`[Debug] Canvas 渲染完成`);
-
-    // 获取文本内容 - 尝试不同选项来处理自定义字体编码
-    // 注意：如果 PDF 缺少 ToUnicode 映射，文本可能仍然是乱码
-    const textContent = await page.getTextContent({
-        includeMarkedContent: true,
-        disableNormalization: false
-    });
-
-    console.log(`[Debug] 文本内容: ${textContent.items.length} 个文本项`);
-    if (textContent.items.length > 0) {
-        const firstItem = textContent.items[0];
-        console.log(`[Debug] 第一个文本项:`, firstItem);
-        if (firstItem.str) {
-            console.log(`[Debug] 第一个文本项 str:`, JSON.stringify(firstItem.str));
-            console.log(`[Debug] 第一个文本项 str 字符码:`, [...firstItem.str].map(c => c.charCodeAt(0)));
-        } else {
-            console.log(`[Debug] 第一个文本项 str 为空或 undefined`);
-        }
-
-        // 显示前 10 个非空文本项
-        console.log(`[Debug] 前 10 个文本项 str 值:`);
-        let count = 0;
-        for (const item of textContent.items) {
-            if (item.str && typeof item.str === 'string' && item.str.trim() && count < 10) {
-                console.log(`  [${count}] str="${item.str}" codes=[${[...item.str].map(c => c.charCodeAt(0)).join(',')}]`);
-                count++;
-            }
-        }
-    }
-
-    // 手动创建文本层（不使用 PDF.js 4.x 的 renderTextLayer，因为它使用控制字符）
-    const items = textContent.items;
-    const styles = textContent.styles;
-
-    console.log(`[Debug] 开始手动创建文本层: ${items.length} 个文本项`);
-
-    // 存储需要调整宽度的 span
-    const spansToAdjust = [];
-
-    for (const item of items) {
-        if (!item.str || item.str.trim() === '') continue;
-
-        const span = document.createElement('span');
-        span.textContent = item.str;
-
-        // 获取字体样式
-        const style = styles[item.fontName];
-        const fontFamily = style?.fontFamily || 'sans-serif';
-
-        // 使用 viewport 转换坐标
-        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-
-        // 计算字体大小和位置
-        const fontHeight = Math.hypot(tx[2], tx[3]);
-
-        span.style.position = 'absolute';
-        span.style.left = `${tx[4]}px`;
-        span.style.top = `${tx[5] - fontHeight}px`;
-        span.style.fontSize = `${fontHeight}px`;
-        span.style.fontFamily = fontFamily;
-        span.style.color = 'transparent';
-        span.style.whiteSpace = 'pre';
-        span.style.pointerEvents = 'all';
-        span.style.transformOrigin = '0% 0%';
-        span.style.lineHeight = '1';
-
-        // 计算旋转
-        const angle = Math.atan2(tx[1], tx[0]);
-        if (Math.abs(angle) > 0.001) {
-            span.style.transform = `rotate(${angle}rad)`;
-        }
-
-        textLayerDiv.appendChild(span);
-
-        // 如果有宽度信息，记录下来稍后调整
-        if (item.width > 0) {
-            spansToAdjust.push({
-                span: span,
-                targetWidth: item.width * viewport.scale,
-                angle: angle
-            });
-        }
-    }
-
-    // 第二遍：测量实际宽度并应用 scaleX 变换来精确匹配
-    for (const { span, targetWidth, angle } of spansToAdjust) {
-        const naturalWidth = span.offsetWidth;
-        if (naturalWidth > 0 && Math.abs(targetWidth - naturalWidth) > 0.5) {
-            const scaleX = targetWidth / naturalWidth;
-            // 需要保留旋转变换
-            if (Math.abs(angle) > 0.001) {
-                span.style.transform = `rotate(${angle}rad) scaleX(${scaleX})`;
-            } else {
-                span.style.transform = `scaleX(${scaleX})`;
-            }
-        }
-    }
-
-    console.log(`[Debug] 文本层创建完成，共 ${textLayerDiv.children.length} 个 spans`);
-
-    // 验证
-    if (textLayerDiv.children.length > 0) {
-        console.log(`[Debug] 第一个 span textContent:`, JSON.stringify(textLayerDiv.children[0].textContent));
-    }
-
+    // 记录到 Map 中以便跳转
     renderedPages.set(pageNum, pageContainer);
-    console.log(`[Debug] 页面 ${pageNum} 渲染完成`);
+
+    // 开始观察
+    observer.observe(pageContainer);
+}
+
+// 渲染单个页面内容（canvas 和 textLayer）
+async function renderPageContent(pageNum, pageContainer) {
+    console.log(`[Debug] 开始渲染页面内容 ${pageNum}`);
+
+    try {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: currentScale });
+
+        // 清空占位 Loading
+        pageContainer.innerHTML = '';
+
+        // 创建 canvas
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width * window.devicePixelRatio;
+        canvas.height = viewport.height * window.devicePixelRatio;
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        context.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        pageContainer.appendChild(canvas);
+
+        // 创建文本层
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.width = viewport.width + 'px';
+        textLayerDiv.style.height = viewport.height + 'px';
+        // PDF.js 4.x 需要设置 --scale-factor CSS 变量
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        pageContainer.appendChild(textLayerDiv);
+
+        // 渲染页面内容到 canvas
+        await page.render({
+            canvasContext: context,
+            viewport: viewport
+        }).promise;
+
+        console.log(`[Debug] 页面 ${pageNum} Canvas 渲染完成`);
+
+        // 获取文本内容 - 尝试不同选项来处理自定义字体编码
+        const textContent = await page.getTextContent({
+            includeMarkedContent: true,
+            disableNormalization: false
+        });
+
+        // 手动创建文本层
+        const items = textContent.items;
+        const styles = textContent.styles;
+
+        // 存储需要调整宽度的 span
+        const spansToAdjust = [];
+
+        for (const item of items) {
+            if (!item.str || item.str.trim() === '') continue;
+
+            const span = document.createElement('span');
+            span.textContent = item.str;
+
+            // 获取字体样式
+            const style = styles[item.fontName];
+            const fontFamily = style?.fontFamily || 'sans-serif';
+
+            // 使用 viewport 转换坐标
+            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+
+            // 计算字体大小和位置
+            const fontHeight = Math.hypot(tx[2], tx[3]);
+
+            span.style.position = 'absolute';
+            span.style.left = `${tx[4]}px`;
+            span.style.top = `${tx[5] - fontHeight}px`;
+            span.style.fontSize = `${fontHeight}px`;
+            span.style.fontFamily = fontFamily;
+            span.style.color = 'transparent';
+            span.style.whiteSpace = 'pre';
+            span.style.pointerEvents = 'all';
+            span.style.transformOrigin = '0% 0%';
+            span.style.lineHeight = '1';
+
+            // 计算旋转
+            const angle = Math.atan2(tx[1], tx[0]);
+            if (Math.abs(angle) > 0.001) {
+                span.style.transform = `rotate(${angle}rad)`;
+            }
+
+            textLayerDiv.appendChild(span);
+
+            // 如果有宽度信息，记录下来稍后调整
+            if (item.width > 0) {
+                spansToAdjust.push({
+                    span: span,
+                    targetWidth: item.width * viewport.scale,
+                    angle: angle
+                });
+            }
+        }
+
+        // 第二遍：测量实际宽度并应用 scaleX 变换来精确匹配
+        for (const { span, targetWidth, angle } of spansToAdjust) {
+            const naturalWidth = span.offsetWidth;
+            if (naturalWidth > 0 && Math.abs(targetWidth - naturalWidth) > 0.5) {
+                const scaleX = targetWidth / naturalWidth;
+                // 需要保留旋转变换
+                if (Math.abs(angle) > 0.001) {
+                    span.style.transform = `rotate(${angle}rad) scaleX(${scaleX})`;
+                } else {
+                    span.style.transform = `scaleX(${scaleX})`;
+                }
+            }
+        }
+
+        console.log(`[Debug] 页面 ${pageNum} 文本层创建完成`);
+    } catch (err) {
+        console.error(`渲染页面 ${pageNum} 失败:`, err);
+        pageContainer.innerHTML = '<div style="padding:20px;color:red;">页面加载失败</div>';
+    }
 }
 
 // ==================== 工具栏功能 ====================
@@ -645,8 +668,9 @@ function handleTextSelection(e) {
     floatButtons.style.gap = gap + 'px';
 
     // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
+    // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
     const btnWidth = 32;  // 单个按钮宽度
-    const containerWidth = btnWidth * 2 + gap;
+    const containerWidth = btnWidth * 3 + gap + 6;
     let left = e.clientX - btnWidth - gap / 2;  // 左边按钮从鼠标左侧开始
     let top = e.clientY - btnWidth / 2;  // 垂直居中于鼠标
 
@@ -682,6 +706,17 @@ function handleTextSelection(e) {
     // 朗读按钮
     const speakBtn = floatButtons.querySelector('.speak-btn');
     speakBtn.onmouseenter = () => speakText(selectedText);
+
+    // 关闭按钮
+    const closeBtn = floatButtons.querySelector('.close-floating-btn');
+    // 移除之前的监听器（如果有）
+    const newCloseBtn = closeBtn.cloneNode(true);
+    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+
+    newCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        floatButtons.style.display = 'none';
+    });
 
     // 延迟隐藏
     floatButtons.onmouseleave = () => {
