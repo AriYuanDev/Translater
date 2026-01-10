@@ -303,6 +303,19 @@ document.getElementById('fitWidth').addEventListener('click', async () => {
     await renderAllPages();
 });
 
+// 下载 PDF
+document.getElementById('downloadPdf').addEventListener('click', () => {
+    const url = getPdfUrl();
+    if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = decodeURIComponent(url.split('/').pop().split('?')[0]);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+});
+
 // 滚动到指定页面
 function scrollToPage(pageNum) {
     const pageContainer = renderedPages.get(pageNum);
