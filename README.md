@@ -50,8 +50,8 @@ Port of the "Fast Trans" extension for VS Code, enabling seamless translation wi
 
 ### Configuration
 You can configure API keys in VS Code Settings:
-*   `translater.deepLApiKey`: DeepL API Key.
-*   `translater.mwApiKey`: Merriam-Webster Dictionary API Key.
+*   `translater.deepLApiKey`: DeepL API Key ([Get Free Key](https://www.deepl.com/pro-api)).
+*   `translater.mwApiKey`: Merriam-Webster Dictionary API Key ([Get Free Key](https://dictionaryapi.com/)).
 
 ---
 

@@ -1,5 +1,6 @@
 {
     "name": "translater-vscode",
+    "publisher": "local",
     "displayName": "Fast Trans for VS Code",
     "description": "Port of the Fast Trans Chrome Extension. Supports hover translation and PDF preview.",
     "version": "0.0.1",
