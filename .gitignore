@@ -1,1 +1,18 @@
+# System
 .DS_Store
+Thumbs.db
+
+# Dependencies
+**/node_modules/
+
+# VS Code Extension Builds
+**/out/
+**/dist/
+**/.vscode-test/
+*.vsix
+
+# IDE Configs (User specific)
+.vscode/
+
+# Logs
+*.log

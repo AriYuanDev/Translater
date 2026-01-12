@@ -1,0 +1,80 @@
+{
+    "name": "translater-vscode",
+    "displayName": "Fast Trans for VS Code",
+    "description": "Port of the Fast Trans Chrome Extension. Supports hover translation and PDF preview.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onLanguage:markdown",
+        "onLanguage:plaintext",
+        "onLanguage:javascript",
+        "onLanguage:typescript",
+        "onLanguage:json",
+        "onCustomEditor:translater.pdfPreview"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "translater.translateSelection",
+                "title": "Translate Selection"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "command": "translater.translateSelection",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "configuration": {
+            "title": "Fast Trans",
+            "properties": {
+                "translater.deepLApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "API Key for DeepL Translation service."
+                },
+                "translater.mwApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "API Key for Merriam-Webster Dictionary."
+                }
+            }
+        },
+        "customEditors": [
+            {
+                "viewType": "translater.pdfPreview",
+                "displayName": "Fast Trans PDF Viewer",
+                "selector": [
+                    {
+                        "filenamePattern": "*.pdf"
+                    }
+                ],
+                "priority": "default"
+            }
+        ]
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "node ./test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.80.0",
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.1",
+        "@types/node": "20.2.5",
+        "eslint": "^8.41.0",
+        "glob": "^8.1.0",
+        "mocha": "^10.2.0",
+        "typescript": "^5.1.3",
+        "@vscode/test-electron": "^2.3.2"
+    }
+}

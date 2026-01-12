@@ -1,129 +1,68 @@
-# 快译 - Chrome 划词翻译扩展
+# Translater / 快译
 
-一个简洁高效的 Chrome 翻译插件，支持双击翻译单词、选中文本悬浮翻译和本地朗读功能。**支持 DeepL 高质量翻译引擎**。
+This repository contains two versions of the "Fast Trans" utility: a **Chrome Browser Extension** and a **VS Code Extension**.
 
-## ✨ 功能特性
+Both extensions share core features like hover translation, PDF previewing, and high-quality dictionary lookups (DeepL / Merriam-Webster).
 
-### 1. 双击翻译单词
-- 双击任意英文单词，立即显示翻译弹窗
-- 显示 **Merriam-Webster 美式音标**（如 `/heˈloʊ/`）
-- 支持词性、释义展示
-- 自动播放单词发音（使用 Merriam-Webster 原生音频）
-
-### 2. 选中文本悬浮按钮
-- 鼠标选中任意文本后，两侧出现悬浮按钮
-- **【🔊】按钮**（鼠标左侧）：悬停即可使用 TTS 朗读选中内容
-- **【译】按钮**（鼠标右侧）：悬停即可翻译选中内容为中文
-
-### 3. 本地朗读 (无需网络)
-- 使用 **Web Speech API** 实现本地朗读
-- 支持 **Piper TTS** 扩展（安装后自动使用高质量 AI 语音）
-- 美式英语发音
-- 无需网络连接
-
-### 4. DeepL 高质量翻译
-- 支持配置 DeepL API 密钥
-- 翻译质量显著优于 Google 翻译
-- 免费版每月 50 万字符
-- 失败时自动回退到 Google 翻译
-
-### 5. PDF 支持
-- 自动检测 PDF 文件并使用内置阅读器打开
-- 支持在 PDF 中使用划词翻译功能
-
-## 🚀 安装方法
-
-1. 打开 Chrome 浏览器，访问 `chrome://extensions/`
-2. 开启右上角的 **「开发者模式」**
-3. 点击 **「加载已解压的扩展程序」**
-4. 选择此项目文件夹 `Translater`
-5. 安装完成！
-
-## 📖 使用说明
-
-### 翻译单词
-1. 在任意网页上**双击**一个英文单词
-2. 弹窗显示单词释义、Merriam-Webster 美式音标
-3. 单词会自动朗读
-4. 点击弹窗右上角的 🔊 按钮可重新朗读
-
-### 翻译句子/段落
-1. 用鼠标**选中**要翻译的文本
-2. 在鼠标两侧会出现悬浮按钮
-3. 悬停在左侧 **「🔊」** 上自动朗读选中内容
-4. 悬停在右侧 **「译」** 上自动翻译成中文
-
-### 关闭弹窗
-- 点击弹窗右上角的 ✕ 按钮
-- 或点击页面其他任意位置
-
-## 📂 文件结构
+## 📁 Repository Structure
 
 ```
 Translater/
-├── manifest.json      # 扩展配置文件
-├── background.js      # 后台服务（API 请求、DeepL/Google 翻译）
-├── content.js         # 内容脚本（UI 交互）
-├── styles.css         # UI 样式
-├── options.html       # 设置页面
-├── options.js         # 设置页面脚本
-├── pdfviewer.*        # PDF 阅读器模块
-├── icons/             # 图标文件
-├── TECHNICAL.md       # 技术手册
-└── README.md          # 本文档
+├── chrome-extension/      # The original Chrome Extension source
+├── vscode-extension/      # The ported VS Code Extension source
+├── .gitignore             # Root gitignore
+└── README.md              # Project documentation
 ```
-
-## 🔧 技术实现
-
-| 功能 | 技术方案 | 网络需求 |
-|------|---------|---------| 
-| 单词翻译 | Merriam-Webster Dictionary | 需要 |
-| 句子翻译 | **DeepL API**（优先）/ Google Translate（备用） | 需要 |
-| 朗读 (TTS) | Web Speech API / **Piper AI TTS** | **本地** |
-| 音标显示 | Merriam-Webster 美式 IPA | 需要 |
-| 单词发音 | Merriam-Webster 原生音频 | 需要 |
-
-## ⚠️ 注意事项
-
-1. **首次使用**可能需要刷新页面
-2. 翻译功能需要**网络连接**
-3. 朗读功能使用系统 TTS，**无需网络**
-4. 部分网站可能禁用内容脚本注入
-
-## 📝 更新日志
-
-### v1.2.2 (2025-12-31)
-- 🎯 悬浮按钮布局优化：发音按钮在鼠标左侧，翻译按钮在鼠标右侧
-- 🎨 按钮完全分离显示，中间透明无背景，更方便点击
-- 📱 同步更新 PDF 阅读器悬浮按钮逻辑
-
-### v1.2.1 (2025-12-30)
-- 🔊 优化 TTS 语音选择，**自动优先使用 Piper 高质量语音**
-- 🛠️ 新增 dictionaryapi.com 权限支持
-
-### v1.2.0 (2025-12-28)
-- ✨ 新增 **DeepL 翻译引擎**支持，翻译质量大幅提升
-- ⚙️ 新增**设置页面**，支持配置 DeepL API 密钥
-- 🔄 智能回退机制：DeepL 失败时自动使用 Google 翻译
-- 🌐 支持多语言翻译（中、英、日、韩、德、法等）
-
-### v1.1.0 (2025-12-28)
-- 🔄 切换到 **Merriam-Webster Dictionary** 作为词典数据源
-- 🇺🇸 优先显示**美式音标**和**美式发音**
-- 🛡️ 添加 **XSS 安全防护**
-- 🐛 修复释义解析问题
-- 📖 添加技术手册文档
-
-### v1.0.0 (2024-12-25)
-- 🎉 首次发布
-- ✅ 双击翻译英文单词
-- ✅ 显示 IPA 格式美式音标
-- ✅ 双击自动朗读
-- ✅ 选中文本悬浮按钮（hover 触发）
-- ✅ 本地 TTS 朗读功能
-- ✅ PDF 阅读器支持
-- ✅ 深色模式支持
 
 ---
 
-Made with ❤️ for better English learning
+## 🌐 Chrome Extension
+
+A concise and efficient Chrome translation plugin supporting double-click word translation, text selection hover, and local TTS.
+
+### Features
+*   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation.
+*   **Hover Actions**: Select text to see "Read Aloud" and "Translate" buttons.
+*   **DeepL Integration**: Configuration for high-quality translations (My fallback: Google).
+*   **PDF Viewer**: Custom PDF viewer with built-in translation support.
+
+### Installation
+1.  Open Chrome → `chrome://extensions/`
+2.  Enable **Developer mode**.
+3.  Click **Load unpacked**.
+4.  Select the `Translater/chrome-extension` folder.
+
+---
+
+## 💻 VS Code Extension
+
+Port of the "Fast Trans" extension for VS Code, enabling seamless translation within your editor.
+
+### Features
+*   **Hover Translation**: Hover over any English word in your code/text files to see definitions and phonetic symbols.
+*   **Context Menu**: Select text, right-click, and choose "Translate Selection".
+*   **PDF Preview**: Open `.pdf` files directly in VS Code using the integrated custom editor.
+
+### Installation (Development)
+1.  Open this folder in VS Code.
+2.  Run `npm install` in the root (or inside `vscode-extension` if managed separately).
+3.  Press `F5` to launch the **Extension Development Host**.
+
+### Configuration
+You can configure API keys in VS Code Settings:
+*   `translater.deepLApiKey`: DeepL API Key.
+*   `translater.mwApiKey`: Merriam-Webster Dictionary API Key.
+
+---
+
+## 🔧 Technology Stack
+
+| Feature | Chrome Extension | VS Code Extension |
+| :--- | :--- | :--- |
+| **Runtime** | Browser JS (DOM) | Node.js / Webviews |
+| **Dictionary** | `fetch` (Background) | `https.request` (Node) |
+| **PDF Viewer** | `pdf.js` (HTML Page) | `pdf.js` (Webview) |
+| **Storage** | `chrome.storage` | `vscode.workspace.getConfiguration` |
+
+## 📝 License
+MIT
