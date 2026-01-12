@@ -39,9 +39,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 Port of the "Fast Trans" extension for VS Code, enabling seamless translation within your editor.
 
 ### Features
-*   **Hover Translation**: Hover over any English word in your code/text files to see definitions and phonetic symbols.
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
-*   **PDF Preview**: Open `.pdf` files directly in VS Code using the integrated custom editor.
 
 ### Installation (Development)
 1.  Open this folder in VS Code.
@@ -51,7 +49,6 @@ Port of the "Fast Trans" extension for VS Code, enabling seamless translation wi
 ### Configuration
 You can configure API keys in VS Code Settings:
 *   `translater.deepLApiKey`: DeepL API Key ([Get Free Key](https://www.deepl.com/pro-api)).
-*   `translater.mwApiKey`: Merriam-Webster Dictionary API Key ([Get Free Key](https://dictionaryapi.com/)).
 
 ---
 
@@ -61,7 +58,6 @@ You can configure API keys in VS Code Settings:
 | :--- | :--- | :--- |
 | **Runtime** | Browser JS (DOM) | Node.js / Webviews |
 | **Dictionary** | `fetch` (Background) | `https.request` (Node) |
-| **PDF Viewer** | `pdf.js` (HTML Page) | `pdf.js` (Webview) |
 | **Storage** | `chrome.storage` | `vscode.workspace.getConfiguration` |
 
 ## 📝 License

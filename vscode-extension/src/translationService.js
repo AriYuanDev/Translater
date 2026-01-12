@@ -2,30 +2,6 @@ const vscode = require('vscode');
 const https = require('https');
 const { URLSearchParams } = require('url');
 
-// Dictionary Cache adapted for Node (Memory only for now)
-const dictionaryCache = new Map();
-const CACHE_MAX_SIZE = 100;
-const CACHE_TTL = 30 * 60 * 1000;
-
-function getCachedDictionary(word) {
-    const cached = dictionaryCache.get(word);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        dictionaryCache.delete(word);
-        dictionaryCache.set(word, cached);
-        return cached.data;
-    }
-    if (cached) dictionaryCache.delete(word);
-    return null;
-}
-
-function setCachedDictionary(word, data) {
-    if (dictionaryCache.size >= CACHE_MAX_SIZE) {
-        const firstKey = dictionaryCache.keys().next().value;
-        dictionaryCache.delete(firstKey);
-    }
-    dictionaryCache.set(word, { data, timestamp: Date.now() });
-}
-
 function getConfiguration(key) {
     return vscode.workspace.getConfiguration('translater').get(key) || '';
 }
@@ -72,29 +48,6 @@ function fetchJson(url, options = {}, retries = 1) {
 
         req.end();
     });
-}
-
-async function fetchDictionary(word) {
-    const normalizedWord = word.toLowerCase();
-    const cached = getCachedDictionary(normalizedWord);
-    if (cached) return cached;
-
-    const apiKey = getConfiguration('mwApiKey');
-    if (!apiKey) throw new Error('Merriam-Webster API Key not configured.');
-
-    const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
-    try {
-        const data = await fetchJson(url);
-        // Parsing logic roughly same as background.js but we might need to simplify for Hover
-        // For brevity, we return raw data or simplified structure. 
-        // We'll reuse the parsing logic logic from background.js if possible, 
-        // but here let's keep it simple and just return the data for the provider to format.
-        setCachedDictionary(normalizedWord, data);
-        return data;
-    } catch (e) {
-        console.error('Dictionary fetch failed', e);
-        throw e;
-    }
 }
 
 async function translateText(text, targetLang = 'ZH') {
@@ -151,6 +104,5 @@ async function translateWithGoogle(text, targetLang) {
 }
 
 module.exports = {
-    fetchDictionary,
     translateText
 };

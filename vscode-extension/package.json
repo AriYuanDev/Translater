@@ -2,8 +2,8 @@
     "name": "translater-vscode",
     "publisher": "local",
     "displayName": "Fast Trans for VS Code",
-    "description": "Port of the Fast Trans Chrome Extension. Supports hover translation and PDF preview.",
-    "version": "0.0.1",
+    "description": "Port of the Fast Trans Chrome Extension. Supports selection translation.",
+    "version": "0.0.5",
     "icon": "icon.png",
     "engines": {
         "vscode": "^1.80.0"
@@ -11,14 +11,7 @@
     "categories": [
         "Other"
     ],
-    "activationEvents": [
-        "onLanguage:markdown",
-        "onLanguage:plaintext",
-        "onLanguage:javascript",
-        "onLanguage:typescript",
-        "onLanguage:json",
-        "onCustomEditor:translater.pdfPreview"
-    ],
+    "activationEvents": [],
     "main": "./extension.js",
     "contributes": {
         "commands": [
@@ -42,26 +35,9 @@
                     "type": "string",
                     "default": "",
                     "description": "API Key for DeepL Translation service."
-                },
-                "translater.mwApiKey": {
-                    "type": "string",
-                    "default": "",
-                    "description": "API Key for Merriam-Webster Dictionary."
                 }
             }
-        },
-        "customEditors": [
-            {
-                "viewType": "translater.pdfPreview",
-                "displayName": "Fast Trans PDF Viewer",
-                "selector": [
-                    {
-                        "filenamePattern": "*.pdf"
-                    }
-                ],
-                "priority": "default"
-            }
-        ]
+        }
     },
     "scripts": {
         "lint": "eslint .",
