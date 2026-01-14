@@ -45,8 +45,8 @@ async function loadPdf(url) {
         totalPagesSpan.textContent = pdfDoc.numPages;
         pdfTitleSpan.textContent = decodeURIComponent(url.split('/').pop().split('?')[0]);
 
-        // 计算初始缩放以适应宽度
-        await calculateFitWidth();
+        // 设置默认缩放为 190%
+        await setDefaultZoom();
 
         // 渲染所有页面
         await renderAllPages();
@@ -56,6 +56,12 @@ async function loadPdf(url) {
         console.error('加载 PDF 失败:', error);
         showError('无法加载 PDF 文件，请检查 URL 是否正确。');
     }
+}
+
+// 设置默认缩放比例为 190%
+async function setDefaultZoom() {
+    currentScale = 1.9; // 默认 190% 缩放
+    updateZoomLevel();
 }
 
 // 计算适应宽度的缩放比例

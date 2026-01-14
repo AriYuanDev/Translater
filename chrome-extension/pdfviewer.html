@@ -67,15 +67,17 @@
     </div>
 
     <!-- 悬浮按钮 -->
+    <!-- 悬浮按钮：顺序为 关闭 - 发音 - [鼠标] - 翻译 -->
     <div id="floatButtons" class="translator-float-buttons" style="display: none;">
+        <button class="translator-float-btn close-floating-btn" data-tooltip="关闭">×</button>
         <button class="translator-float-btn speak-btn" data-tooltip="朗读">
             <svg viewBox="0 0 24 24">
                 <path
                     d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
             </svg>
         </button>
+        <!-- 鼠标位置在这里 -->
         <button class="translator-float-btn translate-btn" data-tooltip="翻译">译</button>
-        <button class="translator-float-btn close-floating-btn" data-tooltip="关闭">×</button>
     </div>
 
     <script type="module" src="pdfviewer.js"></script>
