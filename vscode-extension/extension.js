@@ -37,7 +37,17 @@ function activate(context) {
                 });
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`Translation failed: ${error.message}`);
+            if (error.message === '请先配置 DeepL API Key') {
+                const selection = await vscode.window.showErrorMessage(
+                    'DeepL API Key 未配置，无法翻译。',
+                    '去配置'
+                );
+                if (selection === '去配置') {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'translater.deepLApiKey');
+                }
+            } else {
+                vscode.window.showErrorMessage(`Translation failed: ${error.message}`);
+            }
         }
     });
 
