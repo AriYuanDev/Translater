@@ -3,7 +3,7 @@
     "publisher": "local",
     "displayName": "Fast Trans for VS Code",
     "description": "Port of the Fast Trans Chrome Extension. Supports selection translation.",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "icon": "icon.png",
     "engines": {
         "vscode": "^1.80.0"

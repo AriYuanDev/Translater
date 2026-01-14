@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 清除按钮
     clearBtn.addEventListener('click', async () => {
-        if (confirm('确定要清除 DeepL API 密钥吗？清除后将使用 Google 翻译。')) {
+        if (confirm('确定要清除 DeepL API 密钥吗？清除后翻译功能将不可用。')) {
             await chrome.runtime.sendMessage({
                 action: 'setDeepLApiKey',
                 apiKey: ''
@@ -145,10 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     currentEngine.innerHTML = `
             <span class="engine-badge google">
-              🔄 Google 翻译（基础版）
+              ⚠️ 未配置（翻译不可用）
             </span>
           `;
-                    showStatus('配置 DeepL API 密钥以获得更好的翻译质量', 'info');
+                    showStatus('请配置 DeepL API 密钥以启用翻译功能', 'warning');
                 }
             }
         } catch (error) {

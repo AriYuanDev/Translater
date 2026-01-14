@@ -30,15 +30,11 @@
         return /[a-zA-Z]/.test(text);
     }
 
-    // HTML 转义函数，防止 XSS 攻击（优化版：使用字符串替换而不是创建 DOM）
+    // HTML 转义函数，防止 XSS 攻击（优化版：单次遍历）
     function escapeHtml(text) {
         if (!text) return '';
-        return String(text)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return String(text).replace(/[&<>"']/g, char => escapeMap[char]);
     }
 
     // 使用 TTS 朗读文本（Web Speech API）
@@ -56,6 +52,24 @@
         }
 
         window.speechSynthesis.speak(utterance);
+    }
+
+    // 安全发送消息到 background（带 Service Worker 唤醒保护）
+    async function sendMessageSafe(message) {
+        try {
+            const response = await chrome.runtime.sendMessage(message);
+            if (response === undefined) {
+                // Service Worker 可能未响应，重试一次
+                await new Promise(r => setTimeout(r, 100));
+                return await chrome.runtime.sendMessage(message);
+            }
+            return response;
+        } catch (error) {
+            if (error.message?.includes('Extension context invalidated')) {
+                throw new Error('扩展已更新，请刷新页面');
+            }
+            throw error;
+        }
     }
 
     // 加载并缓存语音列表（优先使用 Piper p5712 高质量语音）
@@ -220,8 +234,8 @@
         currentPopup.style.top = pos.top + 'px';
 
         try {
-            // 通过 background script 获取词典数据
-            const response = await chrome.runtime.sendMessage({
+            // 通过 background script 获取词典数据（使用安全发送）
+            const response = await sendMessageSafe({
                 action: 'fetchDictionary',
                 word: word.toLowerCase()
             });
@@ -232,7 +246,7 @@
                 autoSpeakWord(response.data, word);
             } else {
                 // 如果词典 API 失败，尝试翻译
-                const translateResponse = await chrome.runtime.sendMessage({
+                const translateResponse = await sendMessageSafe({
                     action: 'translate',
                     text: word
                 });
@@ -577,7 +591,7 @@
         currentPopup.querySelector('.translator-close-btn').addEventListener('click', removeAllPopups);
 
         try {
-            const response = await chrome.runtime.sendMessage({
+            const response = await sendMessageSafe({
                 action: 'translate',
                 text: text
             });

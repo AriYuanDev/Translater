@@ -7,6 +7,9 @@ const dictionaryCache = new Map();
 const CACHE_MAX_SIZE = 100;
 const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
 
+// 正在进行中的请求追踪（防止并发重复请求）
+const pendingDictionaryRequests = new Map();
+
 function getCachedDictionary(word) {
   const cached = dictionaryCache.get(word);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -305,7 +308,7 @@ function parseMWLearnersResponse(data, word) {
   };
 }
 
-// 获取词典数据 - 使用 Merriam-Webster Learners Dictionary API（带缓存）
+// 获取词典数据 - 使用 Merriam-Webster Learners Dictionary API（带缓存和并发保护）
 async function fetchDictionary(word) {
   const normalizedWord = word.toLowerCase();
 
@@ -316,39 +319,58 @@ async function fetchDictionary(word) {
     return cached;
   }
 
-  // 获取 API Key
-  const apiKey = await getMWApiKey();
-  if (!apiKey) {
-    throw new Error('请先配置 Merriam-Webster API Key');
+  // 检查是否有正在进行的相同请求（并发保护）
+  if (pendingDictionaryRequests.has(normalizedWord)) {
+    console.log(`[复用请求] ${normalizedWord}`);
+    return pendingDictionaryRequests.get(normalizedWord);
   }
 
-  // 调用 Merriam-Webster Learners Dictionary API
-  const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
+  // 创建新请求并追踪
+  const requestPromise = (async () => {
+    try {
+      // 获取 API Key
+      const apiKey = await getMWApiKey();
+      if (!apiKey) {
+        throw new Error('请先配置 Merriam-Webster API Key');
+      }
 
-  console.log(`[MW API] 查询: ${normalizedWord}`);
+      // 调用 Merriam-Webster Learners Dictionary API
+      const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
 
-  const response = await fetch(url);
+      console.log(`[MW API] 查询: ${normalizedWord}`);
 
-  if (!response.ok) {
-    if (response.status === 403) {
-      throw new Error('API Key 无效或已过期');
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('API Key 无效或已过期');
+        }
+        throw new Error('词典服务暂时不可用');
+      }
+
+      const data = await response.json();
+
+      // 解析 API 响应
+      const result = parseMWLearnersResponse(data, word);
+
+      if (!result) {
+        throw new Error('未找到该单词');
+      }
+
+      // 存入缓存
+      setCachedDictionary(normalizedWord, result);
+
+      return result;
+    } finally {
+      // 无论成功失败，都从追踪表中移除
+      pendingDictionaryRequests.delete(normalizedWord);
     }
-    throw new Error('词典服务暂时不可用');
-  }
+  })();
 
-  const data = await response.json();
+  // 追踪此请求
+  pendingDictionaryRequests.set(normalizedWord, requestPromise);
 
-  // 解析 API 响应
-  const result = parseMWLearnersResponse(data, word);
-
-  if (!result) {
-    throw new Error('未找到该单词');
-  }
-
-  // 存入缓存
-  setCachedDictionary(normalizedWord, result);
-
-  return result;
+  return requestPromise;
 }
 
 // ==================== DeepL API 配置 ====================
@@ -432,52 +454,16 @@ async function translateWithDeepL(text, targetLang, apiKey) {
   throw new Error('DeepL 返回数据格式错误');
 }
 
-// 使用 Google 翻译文本（备用）
-async function translateWithGoogle(text, targetLang) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('翻译服务暂时不可用');
-  }
-
-  const data = await response.json();
-
-  let translatedText = '';
-  if (data && data[0]) {
-    for (const item of data[0]) {
-      if (item[0]) {
-        translatedText += item[0];
-      }
-    }
-  }
-
-  return {
-    original: text,
-    translated: translatedText,
-    sourceLang: data[2] || 'auto',
-    engine: 'Google'
-  };
-}
-
-// 翻译文本（优先使用 DeepL，失败时回退到 Google）
+// 翻译文本（仅使用 DeepL）
 async function translateText(text, targetLang) {
   const apiKey = await getDeepLApiKey();
 
-  if (apiKey) {
-    try {
-      console.log('[翻译] 使用 DeepL 引擎');
-      return await translateWithDeepL(text, targetLang, apiKey);
-    } catch (error) {
-      console.warn('[翻译] DeepL 失败，回退到 Google:', error.message);
-      // DeepL 失败时回退到 Google
-    }
-  } else {
-    console.log('[翻译] 未配置 DeepL API，使用 Google 引擎');
+  if (!apiKey) {
+    throw new Error('请先配置 DeepL API Key');
   }
 
-  return await translateWithGoogle(text, targetLang);
+  console.log('[翻译] 使用 DeepL 引擎');
+  return await translateWithDeepL(text, targetLang, apiKey);
 }
 
 // 扩展安装或更新时的处理
