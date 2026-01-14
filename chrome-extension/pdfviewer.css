@@ -235,24 +235,29 @@ body {
     user-select: none;
 }
 
-/* ==================== 翻译弹窗样式（复用 styles.css） ==================== */
+/* ==================== 翻译弹窗样式（与 styles.css 保持一致） ==================== */
 
 .translator-popup {
     position: fixed;
     z-index: 2147483647;
     max-width: 380px;
-    min-width: 280px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
-    animation: popupFadeIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    min-width: 300px;
+    /* 更丰富的流光渐变背景 - 与网页版一致 */
+    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    border-radius: 20px;
+    /* 彩色环境光晕阴影 */
+    box-shadow:
+        0 10px 40px -10px rgba(161, 140, 209, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    animation: popupFadeIn 0.3s cubic-bezier(0.19, 1, 0.22, 1);
     overflow: hidden;
 }
 
 @keyframes popupFadeIn {
     from {
         opacity: 0;
-        transform: scale(0.9) translateY(-10px);
+        transform: scale(0.95) translateY(10px);
     }
 
     to {
@@ -262,123 +267,151 @@ body {
 }
 
 .translator-popup-content {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    margin: 2px;
-    border-radius: 14px;
-    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    margin: 3px;
+    border-radius: 17px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
 .translator-word-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+    padding-left: 20px;
+    border-bottom: none;
+    /* 渐变分割线 */
+    background-image: linear-gradient(to right, rgba(161, 140, 209, 0.1), rgba(161, 140, 209, 0.6), rgba(161, 140, 209, 0.1));
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    background-position: bottom;
 }
 
 .translator-word {
-    font-size: 22px;
-    font-weight: 700;
-    color: #1a1a2e;
+    font-size: 26px;
+    font-weight: 800;
+    color: #2d3436;
     letter-spacing: -0.5px;
+    background: linear-gradient(120deg, #2d3436 0%, #636e72 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .translator-phonetic {
-    font-size: 14px;
-    color: #667eea;
-    margin-left: 10px;
+    font-size: 15px;
+    color: #8e44ad;
+    margin-left: 12px;
     font-weight: 500;
+    font-family: 'Menlo', 'Monaco', monospace;
+    background: rgba(142, 68, 173, 0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
 }
 
 .translator-speak-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
     border: none;
     border-radius: 50%;
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 4px 15px rgba(161, 140, 209, 0.4);
 }
 
 .translator-speak-btn:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 8px 25px rgba(161, 140, 209, 0.6);
+}
+
+.translator-speak-btn:active {
+    transform: scale(0.95);
 }
 
 .translator-speak-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     fill: white;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
 }
 
 .translator-meanings {
-    margin-top: 8px;
+    margin-top: 12px;
 }
 
 .translator-meaning-item {
-    margin-bottom: 10px;
+    margin-bottom: 14px;
 }
 
 .translator-pos {
     display: inline-block;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: linear-gradient(135deg, #8fd3f4 0%, #84fab0 100%);
+    color: #2d3436;
     font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 4px;
-    margin-right: 8px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-right: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(132, 250, 176, 0.3);
 }
 
 .translator-definition {
-    font-size: 14px;
-    color: #333;
-    line-height: 1.5;
+    font-size: 15px;
+    color: #444;
+    line-height: 1.6;
     margin-top: 6px;
+    font-weight: 400;
 }
 
 .translator-translation {
-    font-size: 15px;
-    color: #1a1a2e;
+    font-size: 16px;
+    color: #2d3436;
     font-weight: 600;
-    margin-top: 4px;
+    margin-top: 6px;
+    line-height: 1.6;
 }
 
 .translator-example {
     font-size: 13px;
-    color: #666;
+    color: #777;
     font-style: italic;
-    margin-top: 6px;
+    margin-top: 8px;
     padding-left: 12px;
-    border-left: 3px solid rgba(102, 126, 234, 0.3);
+    border-left: 2px solid #a18cd1;
+    background: rgba(161, 140, 209, 0.05);
+    padding: 4px 12px;
+    border-radius: 0 4px 4px 0;
 }
 
 .translator-loading {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    color: #667eea;
-    font-size: 14px;
+    padding: 30px;
+    color: #a18cd1;
+    font-size: 15px;
+    font-weight: 500;
 }
 
 .translator-loading::before {
     content: '';
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(102, 126, 234, 0.3);
-    border-top-color: #667eea;
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(161, 140, 209, 0.2);
+    border-top-color: #a18cd1;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 10px;
+    animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+    margin-right: 12px;
 }
 
 @keyframes spin {
@@ -397,23 +430,25 @@ body {
 .translator-close-btn {
     position: absolute;
     top: 8px;
-    right: 8px;
+    left: 8px;
     width: 24px;
     height: 24px;
     border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.3);
-    color: white;
+    background: rgba(0, 0, 0, 0.05);
+    color: #666;
     font-size: 16px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    z-index: 10;
 }
 
 .translator-close-btn:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: #e74c3c;
+    color: white;
     transform: scale(1.1);
 }
 

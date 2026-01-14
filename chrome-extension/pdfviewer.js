@@ -1,247 +1,65 @@
-// 快译 - PDF 阅读器脚本
-// 使用 PDF.js 渲染 PDF 并集成翻译功能
+// 快译 PDF 阅读器脚本
 
-import * as pdfjsLib from './pdf.min.mjs';
+// PDF.js 配置
+const pdfjsLib = await import('./pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 
-// ==================== 初始化配置 ====================
-
-// 设置 PDF.js Worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.min.mjs');
-
-// ==================== 状态管理 ====================
-
-/** @type {pdfjsLib.PDFDocumentProxy | null} */
+// 状态变量
 let pdfDoc = null;
-let currentPage = 1;
-let totalPages = 0;
 let currentScale = 1.0;
-let isRendering = false;
-let pendingPage = null;
+let renderedPages = new Map();
 
-// 缓存美式英语语音
-let cachedUSVoice = null;
-let voicesLoaded = false;
-
-// ==================== DOM 元素 ====================
-
-const viewerContainer = document.getElementById('viewerContainer');
+// DOM 元素
 const viewer = document.getElementById('viewer');
-const prevPageBtn = document.getElementById('prevPage');
-const nextPageBtn = document.getElementById('nextPage');
+const viewerContainer = document.getElementById('viewerContainer');
 const currentPageInput = document.getElementById('currentPage');
 const totalPagesSpan = document.getElementById('totalPages');
-const zoomInBtn = document.getElementById('zoomIn');
-const zoomOutBtn = document.getElementById('zoomOut');
 const zoomLevelSpan = document.getElementById('zoomLevel');
-const fitWidthBtn = document.getElementById('fitWidth');
 const pdfTitleSpan = document.getElementById('pdfTitle');
-const downloadBtn = document.getElementById('downloadPdf');
 const translatorPopup = document.getElementById('translatorPopup');
 const floatButtons = document.getElementById('floatButtons');
 
-// ==================== 工具函数 ====================
+// ==================== PDF 加载与渲染 ====================
 
-/**
- * HTML 转义函数，防止 XSS 攻击
- * @param {string} text 
- * @returns {string}
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-    return String(text).replace(/[&<>"']/g, char => escapeMap[char]);
+// 从 URL 参数获取 PDF 地址
+function getPdfUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('url');
 }
 
-/**
- * 使用 TTS 朗读文本
- * @param {string} text 
- */
-function speakText(text) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    if (cachedUSVoice) {
-        utterance.voice = cachedUSVoice;
-    }
-    window.speechSynthesis.speak(utterance);
-}
-
-/**
- * 加载并缓存语音列表
- */
-function loadVoices() {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0 && !voicesLoaded) {
-        cachedUSVoice = voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en')) ||
-            voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en')) ||
-            voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha')) ||
-            voices.find(v => v.lang === 'en-US');
-        voicesLoaded = true;
-    }
-}
-
-/**
- * 安全发送消息到 background（带 SW 唤醒保护）
- * @param {object} message 
- * @returns {Promise<any>}
- */
-async function sendMessageSafe(message) {
-    try {
-        const response = await chrome.runtime.sendMessage(message);
-        if (response === undefined) {
-            // Service Worker 可能未响应，重试一次
-            await new Promise(r => setTimeout(r, 100));
-            return await chrome.runtime.sendMessage(message);
-        }
-        return response;
-    } catch (error) {
-        if (error.message?.includes('Extension context invalidated')) {
-            throw new Error('扩展已更新，请刷新页面');
-        }
-        throw error;
-    }
-}
-
-// ==================== PDF 渲染 ====================
-
-/**
- * 渲染指定页面
- * @param {number} pageNum 
- */
-async function renderPage(pageNum) {
-    if (!pdfDoc) return;
-
-    if (isRendering) {
-        pendingPage = pageNum;
-        return;
-    }
-
-    isRendering = true;
-
-    try {
-        const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: currentScale });
-
-        // 清空之前的内容
-        viewer.innerHTML = '';
-
-        // 创建 canvas
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        canvas.className = 'pdf-page-canvas';
-
-        viewer.appendChild(canvas);
-
-        // 渲染 PDF 页面到 canvas
-        await page.render({
-            canvasContext: context,
-            viewport: viewport
-        }).promise;
-
-        // 渲染文本层（用于选中文本）
-        const textContent = await page.getTextContent();
-        const textLayerDiv = document.createElement('div');
-        textLayerDiv.className = 'text-layer';
-        textLayerDiv.style.width = `${viewport.width}px`;
-        textLayerDiv.style.height = `${viewport.height}px`;
-
-        viewer.appendChild(textLayerDiv);
-
-        // 使用 PDF.js 的文本层渲染
-        pdfjsLib.renderTextLayer({
-            textContentSource: textContent,
-            container: textLayerDiv,
-            viewport: viewport,
-            textDivs: []
-        });
-
-        // 更新 UI
-        currentPageInput.value = pageNum;
-        currentPage = pageNum;
-
-    } catch (error) {
-        console.error('渲染页面失败:', error);
-        viewer.innerHTML = `<div class="pdf-error">页面渲染失败: ${escapeHtml(error.message)}</div>`;
-    } finally {
-        isRendering = false;
-
-        if (pendingPage !== null) {
-            const nextPage = pendingPage;
-            pendingPage = null;
-            renderPage(nextPage);
-        }
-    }
-}
-
-/**
- * 加载 PDF 文档
- * @param {string} url 
- */
+// 加载 PDF
 async function loadPdf(url) {
     try {
-        pdfTitleSpan.textContent = '加载中...';
+        showLoading(true);
 
-        // 解码 URL（处理双重编码问题）
-        let decodedUrl = url;
-        try {
-            // 检查是否需要解码
-            if (url.includes('%')) {
-                decodedUrl = decodeURIComponent(url);
-            }
-        } catch (e) {
-            // 解码失败则使用原 URL
-            decodedUrl = url;
-        }
-
+        // 加载 PDF 文档
         const loadingTask = pdfjsLib.getDocument({
-            url: decodedUrl,
+            url: url,
             cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
             cMapPacked: true,
         });
 
         pdfDoc = await loadingTask.promise;
-        totalPages = pdfDoc.numPages;
-        totalPagesSpan.textContent = totalPages;
 
-        // 提取文件名作为标题
-        const filename = decodedUrl.split('/').pop()?.split('?')[0] || 'PDF 文档';
-        pdfTitleSpan.textContent = decodeURIComponent(filename);
+        // 更新 UI
+        totalPagesSpan.textContent = pdfDoc.numPages;
+        pdfTitleSpan.textContent = decodeURIComponent(url.split('/').pop().split('?')[0]);
 
-        // 初始适应宽度
-        await fitToWidth();
+        // 计算初始缩放以适应宽度
+        await calculateFitWidth();
 
-        // 渲染第一页
-        await renderPage(1);
+        // 渲染所有页面
+        await renderAllPages();
 
+        showLoading(false);
     } catch (error) {
         console.error('加载 PDF 失败:', error);
-        viewer.innerHTML = `
-            <div class="pdf-error">
-                <h3>⚠️ PDF 加载失败</h3>
-                <p>${escapeHtml(error.message)}</p>
-                <p>可能的原因：</p>
-                <ul>
-                    <li>PDF 文件不存在或 URL 无效</li>
-                    <li>网络连接问题</li>
-                    <li>PDF 文件已损坏或受密码保护</li>
-                    <li>跨域资源限制 (CORS)</li>
-                </ul>
-                <button onclick="location.reload()">重新加载</button>
-            </div>
-        `;
-        pdfTitleSpan.textContent = '加载失败';
+        showError('无法加载 PDF 文件，请检查 URL 是否正确。');
     }
 }
 
-/**
- * 适应宽度
- */
-async function fitToWidth() {
-    if (!pdfDoc) return;
-
+// 计算适应宽度的缩放比例
+async function calculateFitWidth() {
     const page = await pdfDoc.getPage(1);
     const viewport = page.getViewport({ scale: 1.0 });
     const containerWidth = viewerContainer.clientWidth - 40; // 减去 padding
@@ -249,242 +67,800 @@ async function fitToWidth() {
     updateZoomLevel();
 }
 
-/**
- * 更新缩放显示
- */
-function updateZoomLevel() {
-    zoomLevelSpan.textContent = `${Math.round(currentScale * 100)}%`;
+// 渲染所有页面（懒加载：先占位，后渲染）
+async function renderAllPages() {
+    viewer.innerHTML = '';
+    renderedPages.clear();
+
+    // 创建 IntersectionObserver
+    const observerOptions = {
+        root: viewerContainer,
+        rootMargin: '200px', // 提前 200px 开始渲染
+        threshold: 0
+    };
+
+    const intersectionObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const pageContainer = entry.target;
+                const pageNum = parseInt(pageContainer.dataset.pageNum);
+
+                // 只有当页面尚未渲染内容时才渲染
+                if (!pageContainer.dataset.rendered) {
+                    renderPageContent(pageNum, pageContainer);
+                    pageContainer.dataset.rendered = 'true';
+                }
+
+                // 停止观察已进入视口的元素（可选：如果需要回收内存，可以不停止观察，在离开视口时清空内容）
+                observer.unobserve(pageContainer);
+            }
+        });
+    }, observerOptions);
+
+    // 预先获取页面尺寸信息并创建占位元素
+    // 注意：获取 viewport 比较快，render 比较慢
+    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        await createPagePlaceholder(pageNum, intersectionObserver);
+    }
 }
 
-// ==================== 事件处理 ====================
+// 创建页面占位符
+async function createPagePlaceholder(pageNum, observer) {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: currentScale });
+
+    // 创建页面容器
+    const pageContainer = document.createElement('div');
+    pageContainer.className = 'pdf-page-container';
+    pageContainer.dataset.pageNum = pageNum;
+    pageContainer.style.width = viewport.width + 'px';
+    pageContainer.style.height = viewport.height + 'px';
+
+    // 添加加载 Loading 效果
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'page-loading';
+    loadingDiv.textContent = `Loading Page ${pageNum}...`;
+    loadingDiv.style.display = 'flex';
+    loadingDiv.style.alignItems = 'center';
+    loadingDiv.style.justifyContent = 'center';
+    loadingDiv.style.height = '100%';
+    loadingDiv.style.color = '#888';
+
+    pageContainer.appendChild(loadingDiv);
+    viewer.appendChild(pageContainer);
+
+    // 记录到 Map 中以便跳转
+    renderedPages.set(pageNum, pageContainer);
+
+    // 开始观察
+    observer.observe(pageContainer);
+}
+
+// 渲染单个页面内容（canvas 和 textLayer）
+async function renderPageContent(pageNum, pageContainer) {
+    console.log(`[Debug] 开始渲染页面内容 ${pageNum}`);
+
+    try {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: currentScale });
+
+        // 清空占位 Loading
+        pageContainer.innerHTML = '';
+
+        // 创建 canvas
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width * window.devicePixelRatio;
+        canvas.height = viewport.height * window.devicePixelRatio;
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        context.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        pageContainer.appendChild(canvas);
+
+        // 创建文本层
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.width = viewport.width + 'px';
+        textLayerDiv.style.height = viewport.height + 'px';
+        // PDF.js 4.x 需要设置 --scale-factor CSS 变量
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        pageContainer.appendChild(textLayerDiv);
+
+        // 渲染页面内容到 canvas
+        await page.render({
+            canvasContext: context,
+            viewport: viewport
+        }).promise;
+
+        console.log(`[Debug] 页面 ${pageNum} Canvas 渲染完成`);
+
+        // 获取文本内容 - 尝试不同选项来处理自定义字体编码
+        const textContent = await page.getTextContent({
+            includeMarkedContent: true,
+            disableNormalization: false
+        });
+
+        // 手动创建文本层
+        const items = textContent.items;
+        const styles = textContent.styles;
+
+        // 存储需要调整宽度的 span
+        const spansToAdjust = [];
+
+        for (const item of items) {
+            if (!item.str || item.str.trim() === '') continue;
+
+            const span = document.createElement('span');
+            span.textContent = item.str;
+
+            // 获取字体样式
+            const style = styles[item.fontName];
+            const fontFamily = style?.fontFamily || 'sans-serif';
+
+            // 使用 viewport 转换坐标
+            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+
+            // 计算字体大小和位置
+            const fontHeight = Math.hypot(tx[2], tx[3]);
+
+            span.style.position = 'absolute';
+            span.style.left = `${tx[4]}px`;
+            span.style.top = `${tx[5] - fontHeight}px`;
+            span.style.fontSize = `${fontHeight}px`;
+            span.style.fontFamily = fontFamily;
+            span.style.color = 'transparent';
+            span.style.whiteSpace = 'pre';
+            span.style.pointerEvents = 'all';
+            span.style.transformOrigin = '0% 0%';
+            span.style.lineHeight = '1';
+
+            // 计算旋转
+            const angle = Math.atan2(tx[1], tx[0]);
+            if (Math.abs(angle) > 0.001) {
+                span.style.transform = `rotate(${angle}rad)`;
+            }
+
+            textLayerDiv.appendChild(span);
+
+            // 如果有宽度信息，记录下来稍后调整
+            if (item.width > 0) {
+                spansToAdjust.push({
+                    span: span,
+                    targetWidth: item.width * viewport.scale,
+                    angle: angle
+                });
+            }
+        }
+
+        // 第二遍：测量实际宽度并应用 scaleX 变换来精确匹配
+        for (const { span, targetWidth, angle } of spansToAdjust) {
+            const naturalWidth = span.offsetWidth;
+            if (naturalWidth > 0 && Math.abs(targetWidth - naturalWidth) > 0.5) {
+                const scaleX = targetWidth / naturalWidth;
+                // 需要保留旋转变换
+                if (Math.abs(angle) > 0.001) {
+                    span.style.transform = `rotate(${angle}rad) scaleX(${scaleX})`;
+                } else {
+                    span.style.transform = `scaleX(${scaleX})`;
+                }
+            }
+        }
+
+        console.log(`[Debug] 页面 ${pageNum} 文本层创建完成`);
+    } catch (err) {
+        console.error(`渲染页面 ${pageNum} 失败:`, err);
+        pageContainer.innerHTML = '<div style="padding:20px;color:red;">页面加载失败</div>';
+    }
+}
+
+// ==================== 工具栏功能 ====================
 
 // 上一页
-prevPageBtn.addEventListener('click', () => {
+document.getElementById('prevPage').addEventListener('click', () => {
+    const currentPage = parseInt(currentPageInput.value);
     if (currentPage > 1) {
-        renderPage(currentPage - 1);
+        scrollToPage(currentPage - 1);
     }
 });
 
 // 下一页
-nextPageBtn.addEventListener('click', () => {
-    if (currentPage < totalPages) {
-        renderPage(currentPage + 1);
+document.getElementById('nextPage').addEventListener('click', () => {
+    const currentPage = parseInt(currentPageInput.value);
+    if (currentPage < pdfDoc.numPages) {
+        scrollToPage(currentPage + 1);
     }
 });
 
 // 页码输入
 currentPageInput.addEventListener('change', () => {
-    let pageNum = parseInt(currentPageInput.value, 10);
-    if (isNaN(pageNum) || pageNum < 1) pageNum = 1;
-    if (pageNum > totalPages) pageNum = totalPages;
-    renderPage(pageNum);
+    let page = parseInt(currentPageInput.value);
+    page = Math.max(1, Math.min(page, pdfDoc.numPages));
+    scrollToPage(page);
 });
 
 // 缩小
-zoomOutBtn.addEventListener('click', () => {
+document.getElementById('zoomOut').addEventListener('click', () => {
     if (currentScale > 0.25) {
         currentScale -= 0.25;
         updateZoomLevel();
-        renderPage(currentPage);
+        renderAllPages();
     }
 });
 
 // 放大
-zoomInBtn.addEventListener('click', () => {
+document.getElementById('zoomIn').addEventListener('click', () => {
     if (currentScale < 4.0) {
         currentScale += 0.25;
         updateZoomLevel();
-        renderPage(currentPage);
+        renderAllPages();
     }
 });
 
 // 适应宽度
-fitWidthBtn.addEventListener('click', async () => {
-    await fitToWidth();
-    renderPage(currentPage);
+document.getElementById('fitWidth').addEventListener('click', async () => {
+    await calculateFitWidth();
+    await renderAllPages();
 });
 
 // 下载 PDF
-downloadBtn.addEventListener('click', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const pdfUrl = urlParams.get('url');
-    if (pdfUrl) {
-        const a = document.createElement('a');
-        a.href = pdfUrl;
-        a.download = '';
-        a.click();
+document.getElementById('downloadPdf').addEventListener('click', () => {
+    const url = getPdfUrl();
+    if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = decodeURIComponent(url.split('/').pop().split('?')[0]);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 });
 
-// 键盘快捷键
-document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
-
-    switch (e.key) {
-        case 'ArrowLeft':
-        case 'PageUp':
-            if (currentPage > 1) renderPage(currentPage - 1);
-            break;
-        case 'ArrowRight':
-        case 'PageDown':
-            if (currentPage < totalPages) renderPage(currentPage + 1);
-            break;
-        case '+':
-        case '=':
-            zoomInBtn.click();
-            break;
-        case '-':
-            zoomOutBtn.click();
-            break;
+// 滚动到指定页面
+function scrollToPage(pageNum) {
+    const pageContainer = renderedPages.get(pageNum);
+    if (pageContainer) {
+        pageContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        currentPageInput.value = pageNum;
     }
-});
+}
 
-// 滚轮缩放（Ctrl + 滚轮）
-viewerContainer.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-            zoomInBtn.click();
-        } else {
-            zoomOutBtn.click();
+// 更新缩放级别显示
+function updateZoomLevel() {
+    zoomLevelSpan.textContent = Math.round(currentScale * 100) + '%';
+}
+
+// 监听滚动更新当前页码
+viewerContainer.addEventListener('scroll', () => {
+    const containerRect = viewerContainer.getBoundingClientRect();
+    const centerY = containerRect.top + containerRect.height / 3;
+
+    for (const [pageNum, container] of renderedPages) {
+        const rect = container.getBoundingClientRect();
+        if (rect.top <= centerY && rect.bottom >= centerY) {
+            currentPageInput.value = pageNum;
+            break;
         }
     }
 });
 
 // ==================== 翻译功能 ====================
 
+// 创建发音 SVG
+function createSpeakerSVG() {
+    return `<svg viewBox="0 0 24 24">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+    </svg>`;
+}
+
+// 检测文本是否包含英文字母
+function containsEnglish(text) {
+    return /[a-zA-Z]/.test(text);
+}
+
+// HTML 转义函数，防止 XSS 攻击
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 使用 TTS 朗读（优先 Piper p5712 高质量语音）
+function speakText(text) {
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+
+    const voices = window.speechSynthesis.getVoices();
+    // 优先 p8699 语音（libritts 高质量英语语音），其次其他 Piper 语音，再次 Samantha，最后任意美式英语
+    const usVoice = voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
+        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
+        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
+        || voices.find(v => v.lang === 'en-US');
+
+    if (usVoice) {
+        utterance.voice = usVoice;
+        console.log('[TTS] 使用语音:', usVoice.name);
+    }
+    window.speechSynthesis.speak(utterance);
+}
+
+// 播放音频
+function playAudio(audioUrl, fallbackWord) {
+    if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.play().catch(() => {
+            if (fallbackWord) speakText(fallbackWord);
+        });
+    } else if (fallbackWord) {
+        speakText(fallbackWord);
+    }
+}
+
+// 自动朗读单词
+function autoSpeakWord(data, word) {
+    let audioUrl = '';
+
+    if (data.phonetics && data.phonetics.length > 0) {
+        for (const p of data.phonetics) {
+            // 优先选择美式发音（MW、Cambridge、老 API）
+            if (p.audio && (p.audio.includes('merriam-webster.com') || p.audio.includes('us_pron') || p.audio.includes('-us') || p.audio.includes('/us/'))) {
+                audioUrl = p.audio;
+                break;
+            }
+            if (p.audio && !audioUrl) audioUrl = p.audio;
+        }
+    }
+
+    if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.play().catch(() => speakText(word));
+    } else {
+        speakText(word);
+    }
+}
+
+// 隐藏所有弹窗
+function hideAllPopups() {
+    translatorPopup.style.display = 'none';
+    floatButtons.style.display = 'none';
+}
+
+// 计算弹窗位置
+function calculatePopupPosition(x, y, width, height) {
+    const padding = 10;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = x + padding;
+    let top = y + padding;
+
+    if (left + width > viewportWidth - padding) {
+        left = x - width - padding;
+    }
+    if (top + height > viewportHeight - padding) {
+        top = y - height - padding;
+    }
+
+    return {
+        left: Math.max(padding, left),
+        top: Math.max(padding, top)
+    };
+}
+
+// 双击翻译单词
+viewer.addEventListener('dblclick', async (e) => {
+    const selection = window.getSelection();
+    const word = selection.toString().trim();
+
+    hideAllPopups();
+
+    // 如果不是英文单词，直接返回
+    if (!word || !/^[a-zA-Z]+$/.test(word)) {
+        return;
+    }
+
+    // 显示加载状态（包含原单词）
+    translatorPopup.style.display = 'block';
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(word)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                <div class="translator-loading">正在查询...</div>
+            </div>
+        </div>
+    `;
+
+    const pos = calculatePopupPosition(e.clientX, e.clientY, 350, 200);
+    translatorPopup.style.left = pos.left + 'px';
+    translatorPopup.style.top = pos.top + 'px';
+
+    // 绑定加载状态的按钮事件
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => {
+        speakText(word);
+    });
+
+    try {
+        const response = await chrome.runtime.sendMessage({
+            action: 'fetchDictionary',
+            word: word.toLowerCase()
+        });
+
+        if (response.success) {
+            renderWordPopup(response.data, word);
+            autoSpeakWord(response.data, word);
+        } else {
+            // 尝试翻译
+            const translateResponse = await chrome.runtime.sendMessage({
+                action: 'translate',
+                text: word
+            });
+
+            if (translateResponse.success) {
+                renderSimpleTranslation(word, translateResponse.data.translated);
+                speakText(word);
+            } else {
+                renderError(word, response.error || '查询失败');
+            }
+        }
+    } catch (error) {
+        renderError(word, '网络错误，请重试');
+    }
+});
+
+// 渲染单词弹窗
+function renderWordPopup(data, originalWord) {
+    let phonetic = data.phonetic || '';
+    let audioUrl = '';
+
+    if (data.phonetics && data.phonetics.length > 0) {
+        for (const p of data.phonetics) {
+            // 优先选择美式发音（MW、Cambridge、老 API）
+            if (p.audio && (p.audio.includes('merriam-webster.com') || p.audio.includes('us_pron') || p.audio.includes('-us') || p.audio.includes('/us/'))) {
+                audioUrl = p.audio;
+                if (p.text) phonetic = p.text;
+                break;
+            }
+            if (p.text && !phonetic) phonetic = p.text;
+            if (p.audio && !audioUrl) audioUrl = p.audio;
+        }
+    }
+
+    let meaningsHtml = '';
+    if (data.meanings && data.meanings.length > 0) {
+        for (const meaning of data.meanings.slice(0, 3)) {
+            const pos = meaning.partOfSpeech;
+            const definitions = meaning.definitions.slice(0, 2);
+
+            let defsHtml = definitions.map(def => {
+                let html = `<div class="translator-definition">${escapeHtml(def.definition)}</div>`;
+                if (def.example) {
+                    html += `<div class="translator-example">"${escapeHtml(def.example)}"</div>`;
+                }
+                return html;
+            }).join('');
+
+            meaningsHtml += `
+                <div class="translator-meaning-item">
+                    <span class="translator-pos">${escapeHtml(pos)}</span>
+                    ${defsHtml}
+                </div>
+            `;
+        }
+    }
+
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(originalWord)}</span>
+                    <span class="translator-phonetic">${escapeHtml(phonetic)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                ${meaningsHtml || '<div class="translator-definition">暂无详细释义</div>'}
+            </div>
+        </div>
+    `;
+
+    // 绑定事件
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => {
+        if (audioUrl) {
+            playAudio(audioUrl, originalWord);
+        } else {
+            speakText(originalWord);
+        }
+    });
+}
+
+// 渲染简单翻译
+function renderSimpleTranslation(word, translation) {
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(word)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                <div class="translator-translation">${escapeHtml(translation)}</div>
+            </div>
+        </div>
+    `;
+
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => speakText(word));
+}
+
+// 渲染错误（显示原单词和错误提示）
+function renderError(word, message) {
+    translatorPopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-popup-content">
+            <div class="translator-word-header">
+                <div>
+                    <span class="translator-word">${escapeHtml(word)}</span>
+                </div>
+                <button class="translator-speak-btn" title="朗读">
+                    ${createSpeakerSVG()}
+                </button>
+            </div>
+            <div class="translator-meanings">
+                <div class="translator-error">❌ ${escapeHtml(message)}</div>
+            </div>
+        </div>
+    `;
+
+    translatorPopup.querySelector('.translator-close-btn').addEventListener('click', hideAllPopups);
+    translatorPopup.querySelector('.translator-speak-btn').addEventListener('click', () => speakText(word));
+}
+
+// ==================== 选中文本悬浮按钮 ====================
+
 let hideFloatButtonsTimeout = null;
 
-// 移除悬浮按钮
-function removeFloatButtons() {
+viewer.addEventListener('mouseup', (e) => {
+    setTimeout(() => handleTextSelection(e), 50);
+});
+
+function handleTextSelection(e) {
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+
+    // 如果点击在弹窗内，不处理
+    if (e.target.closest('.translator-popup') ||
+        e.target.closest('.translator-float-buttons') ||
+        e.target.closest('.translator-sentence-popup')) {
+        return;
+    }
+
+    // 清理悬浮按钮
+    floatButtons.style.display = 'none';
     if (hideFloatButtonsTimeout) {
         clearTimeout(hideFloatButtonsTimeout);
         hideFloatButtonsTimeout = null;
     }
+
+    if (!text) return;
+
+    // 单个英文单词由双击处理
+    if (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) return;
+
+    // 只有选中的文本包含英文时才显示悬浮按钮
+    if (!containsEnglish(text)) return;
+
+    // 显示悬浮按钮
+    floatButtons.style.display = 'flex';
+
+    // 获取按钮容器尺寸
+    const btnRect = floatButtons.getBoundingClientRect();
+    const gap = 30;  // 两个按钮之间的间距（鼠标在中间）
+
+    // 设置 gap 使两个按钮分开
+    floatButtons.style.gap = gap + 'px';
+
+    // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
+    // 计算位置 - 发音按钮在鼠标左边，翻译按钮在鼠标右边
+    const btnWidth = 32;  // 单个按钮宽度
+    const containerWidth = btnWidth * 3 + gap + 6;
+    let left = e.clientX - btnWidth - gap / 2;  // 左边按钮从鼠标左侧开始
+    let top = e.clientY - btnWidth / 2;  // 垂直居中于鼠标
+
+    // 防止超出左边界
+    if (left < 10) {
+        left = 10;
+    }
+
+    // 防止超出右边界
+    if (left + containerWidth > window.innerWidth - 10) {
+        left = window.innerWidth - containerWidth - 10;
+    }
+
+    // 防止超出上下边界
+    if (top < 60) top = 60;  // 避开工具栏
+    if (top + btnWidth > window.innerHeight - 10) {
+        top = window.innerHeight - btnWidth - 10;
+    }
+
+    floatButtons.style.left = left + 'px';
+    floatButtons.style.top = top + 'px';
+
+    const selectedText = text;
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+
+    // 翻译按钮
+    const translateBtn = floatButtons.querySelector('.translate-btn');
+    translateBtn.onmouseenter = async () => {
+        await translateSelection(selectedText, mouseX, mouseY);
+    };
+
+    // 朗读按钮
+    const speakBtn = floatButtons.querySelector('.speak-btn');
+    speakBtn.onmouseenter = () => speakText(selectedText);
+
+    // 关闭按钮
+    const closeBtn = floatButtons.querySelector('.close-floating-btn');
+    // 移除之前的监听器（如果有）
+    const newCloseBtn = closeBtn.cloneNode(true);
+    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+
+    newCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        floatButtons.style.display = 'none';
+    });
+
+    // 延迟隐藏
+    floatButtons.onmouseleave = () => {
+        hideFloatButtonsTimeout = setTimeout(() => {
+            floatButtons.style.display = 'none';
+        }, 500);
+    };
+
+    floatButtons.onmouseenter = () => {
+        if (hideFloatButtonsTimeout) {
+            clearTimeout(hideFloatButtonsTimeout);
+            hideFloatButtonsTimeout = null;
+        }
+    };
+}
+
+// 翻译选中文本
+async function translateSelection(text, x, y) {
     floatButtons.style.display = 'none';
-}
 
-// 移除弹窗
-function removePopup() {
-    translatorPopup.style.display = 'none';
-}
+    // 创建句子翻译弹窗
+    const sentencePopup = document.createElement('div');
+    sentencePopup.className = 'translator-sentence-popup';
+    sentencePopup.innerHTML = `
+        <button class="translator-close-btn" title="关闭">×</button>
+        <div class="translator-sentence-content">
+            <div class="translator-loading">正在翻译...</div>
+        </div>
+    `;
 
-// 处理文本选中
-document.addEventListener('mouseup', (e) => {
-    setTimeout(() => {
-        const selection = window.getSelection();
-        const text = selection.toString().trim();
+    document.body.appendChild(sentencePopup);
 
-        // 如果点击在弹窗或按钮内，不处理
-        if (e.target.closest('.translator-popup') ||
-            e.target.closest('.translator-float-buttons')) {
-            return;
-        }
+    const pos = calculatePopupPosition(x, y, 400, 150);
+    sentencePopup.style.left = pos.left + 'px';
+    sentencePopup.style.top = pos.top + 'px';
 
-        removeFloatButtons();
-
-        if (!text || !/[a-zA-Z]/.test(text)) {
-            return;
-        }
-
-        // 显示悬浮按钮
-        floatButtons.style.display = 'flex';
-        floatButtons.style.left = `${e.clientX + 10}px`;
-        floatButtons.style.top = `${e.clientY - 20}px`;
-
-        // 绑定事件
-        const speakBtn = floatButtons.querySelector('.speak-btn');
-        const translateBtn = floatButtons.querySelector('.translate-btn');
-        const closeBtn = floatButtons.querySelector('.close-floating-btn');
-
-        // 移除旧的事件监听器
-        const newSpeakBtn = speakBtn.cloneNode(true);
-        const newTranslateBtn = translateBtn.cloneNode(true);
-        const newCloseBtn = closeBtn.cloneNode(true);
-        speakBtn.replaceWith(newSpeakBtn);
-        translateBtn.replaceWith(newTranslateBtn);
-        closeBtn.replaceWith(newCloseBtn);
-
-        newSpeakBtn.addEventListener('mouseenter', () => speakText(text));
-        newTranslateBtn.addEventListener('mouseenter', () => translateText(text, e.clientX, e.clientY));
-        newCloseBtn.addEventListener('click', removeFloatButtons);
-
-        // 鼠标离开后延迟隐藏
-        floatButtons.addEventListener('mouseleave', () => {
-            hideFloatButtonsTimeout = setTimeout(removeFloatButtons, 500);
-        });
-
-        floatButtons.addEventListener('mouseenter', () => {
-            if (hideFloatButtonsTimeout) {
-                clearTimeout(hideFloatButtonsTimeout);
-                hideFloatButtonsTimeout = null;
-            }
-        });
-
-    }, 50);
-});
-
-// 翻译文本
-async function translateText(text, x, y) {
-    removeFloatButtons();
-
-    // 显示弹窗
-    translatorPopup.style.display = 'block';
-    translatorPopup.style.left = `${x + 10}px`;
-    translatorPopup.style.top = `${y + 10}px`;
-
-    const contentEl = translatorPopup.querySelector('.translator-popup-content');
-    contentEl.innerHTML = '<div class="translator-loading">正在翻译...</div>';
-
-    // 绑定关闭按钮
-    translatorPopup.querySelector('.translator-close-btn').onclick = removePopup;
+    sentencePopup.querySelector('.translator-close-btn').addEventListener('click', () => {
+        sentencePopup.remove();
+    });
 
     try {
-        const response = await sendMessageSafe({
+        const response = await chrome.runtime.sendMessage({
             action: 'translate',
             text: text
         });
 
-        if (response?.success) {
-            contentEl.innerHTML = `<div class="translator-result">${escapeHtml(response.data.translated)}</div>`;
+        if (response.success) {
+            sentencePopup.querySelector('.translator-sentence-content').innerHTML =
+                `<div class="translator-result">${escapeHtml(response.data.translated)}</div>`;
         } else {
-            contentEl.innerHTML = `<div class="translator-error">❌ ${escapeHtml(response?.error || '翻译失败')}</div>`;
+            sentencePopup.querySelector('.translator-sentence-content').innerHTML =
+                `<div class="translator-error">❌ ${escapeHtml(response.error)}</div>`;
         }
     } catch (error) {
-        contentEl.innerHTML = `<div class="translator-error">❌ ${escapeHtml(error.message)}</div>`;
+        sentencePopup.querySelector('.translator-sentence-content').innerHTML =
+            `<div class="translator-error">❌ 网络错误，请重试</div>`;
     }
 }
 
-// 点击其他地方关闭
+// ==================== 点击其他地方关闭弹窗 ====================
+
 document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.translator-popup') &&
-        !e.target.closest('.translator-float-buttons')) {
-        removePopup();
+    if (e.target.closest('.translator-float-buttons')) return;
+
+    if (translatorPopup.style.display !== 'none' && !translatorPopup.contains(e.target)) {
+        translatorPopup.style.display = 'none';
     }
+
+    // 关闭句子翻译弹窗
+    const sentencePopups = document.querySelectorAll('.translator-sentence-popup');
+    sentencePopups.forEach(popup => {
+        if (!popup.contains(e.target)) {
+            popup.remove();
+        }
+    });
 });
+
+// ==================== 辅助函数 ====================
+
+// 显示加载状态
+function showLoading(show) {
+    let overlay = document.querySelector('.loading-overlay');
+
+    if (show) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'loading-overlay';
+            overlay.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div class="loading-text">正在加载 PDF...</div>
+            `;
+            document.body.appendChild(overlay);
+        }
+    } else {
+        if (overlay) overlay.remove();
+    }
+}
+
+// 显示错误
+function showError(message) {
+    showLoading(false);
+    viewer.innerHTML = `
+        <div class="error-container">
+            <div class="error-icon">📄</div>
+            <div class="error-message">${escapeHtml(message)}</div>
+            <button class="error-retry-btn" id="retryBtn">重试</button>
+        </div>
+    `;
+
+    // 绑定重试按钮事件
+    document.getElementById('retryBtn').addEventListener('click', () => {
+        location.reload();
+    });
+}
+
+// ==================== 预加载语音 ====================
+
+if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+    };
+}
 
 // ==================== 初始化 ====================
 
-// 预加载语音
-if (window.speechSynthesis) {
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-}
-
-// 从 URL 参数获取 PDF 地址并加载
-const urlParams = new URLSearchParams(window.location.search);
-const pdfUrl = urlParams.get('url');
-
+const pdfUrl = getPdfUrl();
 if (pdfUrl) {
     loadPdf(pdfUrl);
 } else {
-    viewer.innerHTML = `
-        <div class="pdf-error">
-            <h3>⚠️ 未指定 PDF 文件</h3>
-            <p>请通过扩展程序打开 PDF 文件。</p>
-        </div>
-    `;
-    pdfTitleSpan.textContent = '无文件';
+    showError('未指定 PDF 文件地址');
 }
 
 console.log('快译 PDF 阅读器已加载');
