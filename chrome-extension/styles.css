@@ -293,10 +293,12 @@
 /* 悬浮关闭按钮 */
 .translator-float-btn.close-floating-btn {
   position: absolute;
-  /* 改为绝对定位 */
-  left: -34px;
-  /* 移到左侧 */
-  top: 4px;
+  /* 绝对定位 */
+  left: 50%;
+  margin-left: -12px;
+  /* 居中: 宽度24px的一半 */
+  top: -34px;
+  /* 移到上方 */
 
   background: rgba(100, 100, 100, 0.8);
   color: white;

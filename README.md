@@ -22,7 +22,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 
 ### Features
 *   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation.
-*   **Hover Actions**: Select text to see "Read Aloud" and "Translate" buttons.
+*   **Smart Hover Actions**: Select text to see floating buttons (Pronounce / Translate). Close button positions smartly on top, supports hover-to-close.
 *   **DeepL Integration**: Configuration for high-quality translations (My fallback: Google).
 *   **PDF Viewer**: Custom PDF viewer with built-in translation support.
 

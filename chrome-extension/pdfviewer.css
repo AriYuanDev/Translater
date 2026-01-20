@@ -534,6 +534,31 @@ body {
     margin-bottom: 6px;
 }
 
+/* 悬浮关闭按钮 */
+.translator-float-btn.close-floating-btn {
+    position: absolute;
+    /* 绝对定位 */
+    left: 50%;
+    margin-left: -12px;
+    /* 居中: 宽度24px的一半 */
+    top: -34px;
+    /* 移到上方 */
+
+    background: rgba(100, 100, 100, 0.8);
+    color: white;
+    font-size: 18px;
+    font-weight: 300;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    width: 24px;
+    height: 24px;
+    margin-top: 0;
+}
+
+.translator-float-btn.close-floating-btn:hover {
+    background: #e74c3c;
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+}
+
 .translator-float-btn:hover::after {
     opacity: 1;
 }

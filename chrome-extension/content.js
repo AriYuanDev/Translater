@@ -538,10 +538,15 @@
         });
 
         // 关闭按钮
-        currentFloatButtons.querySelector('.close-floating-btn').addEventListener('click', (e) => {
-            e.stopPropagation(); // 防止触发 window 的 click
+        const closeBtn = currentFloatButtons.querySelector('.close-floating-btn');
+        const closeAction = (e) => {
+            if (e) e.stopPropagation();
             removeFloatButtons();
-        });
+        };
+
+        closeBtn.addEventListener('click', closeAction);
+        // 鼠标悬停也触发关闭
+        closeBtn.addEventListener('mouseenter', closeAction);
 
         // 鼠标移出悬浮按钮容器后延迟隐藏
         currentFloatButtons.addEventListener('mouseleave', () => {

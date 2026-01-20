@@ -687,10 +687,11 @@ function handleTextSelection(e) {
     floatButtons.style.gap = gap + 'px';
 
     // 计算位置 - 鼠标应该在发音和翻译按钮之间
-    // 布局：[关闭][gap][发音][gap/2][鼠标][gap/2][翻译]
-    // 鼠标位置到容器左边的距离 = 关闭按钮 + gap + 发音按钮 + gap/2
-    const mouseOffset = btnWidth + gap + btnWidth + gap / 2;
-    const containerWidth = btnWidth * 3 + gap * 2;  // 3个按钮 + 2个gap
+    // 布局：[发音][gap/2][鼠标][gap/2][翻译]
+    // 关闭按钮现在是绝对定位，不占布局空间
+    // 鼠标位置到容器左边的距离 = 发音按钮 + gap/2
+    const mouseOffset = btnWidth + gap / 2;
+    const containerWidth = btnWidth * 2 + gap;  // 2个按钮 + 1个gap
 
     let left = e.clientX - mouseOffset;
     let top = e.clientY - btnWidth / 2;  // 垂直居中于鼠标
@@ -734,10 +735,13 @@ function handleTextSelection(e) {
     const newCloseBtn = closeBtn.cloneNode(true);
     closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
 
-    newCloseBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+    const closeAction = (e) => {
+        if (e) e.stopPropagation();
         floatButtons.style.display = 'none';
-    });
+    };
+
+    newCloseBtn.addEventListener('click', closeAction);
+    newCloseBtn.addEventListener('mouseenter', closeAction);
 
     // 延迟隐藏
     floatButtons.onmouseleave = () => {

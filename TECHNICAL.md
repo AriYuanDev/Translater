@@ -42,7 +42,8 @@
 | `styles.css` | CSS | 弹窗和按钮样式 |
 | `options.html` | HTML | 设置页面 UI |
 | `options.js` | JS | 设置页面逻辑，API 密钥管理 |
-| `pdfviewer.*` | 多种 | PDF 阅读器模块 |
+| `options.js` | JS | 设置页面逻辑，API 密钥管理 |
+| `pdfviewer.*` | 多种 | PDF 阅读器模块 (注: 采用预定义 DOM 结构，与 content.js 的动态创建不同) |
 
 ---
 
@@ -149,13 +150,17 @@ function buildMWAudioUrl(audioFileName) {
 
 ```
 双击英文单词 ──► 显示加载弹窗（含单词）
-             ──► 发送 fetchDictionary 消息
+                  ──► 发送 fetchDictionary 消息
              ├─► 成功 ──► 渲染词典弹窗 + 自动朗读
              └─► 失败 ──► 尝试翻译 ──► 显示错误（含单词）
 
-选中文本 ──► 显示悬浮按钮（🔊在鼠标左侧，译在鼠标右侧）
+选中文本 ──► 显示悬浮按钮组
+         │ 布局：[发音] [鼠标] [翻译]
+         │      [ 关闭 ] (悬浮于上方居中)
+         │
          ├─► 悬停左侧「🔊」──► 调用 speakText() 朗读
-         └─► 悬停右侧「译」──► 发送 translate 消息 ──► 显示翻译结果
+         ├─► 悬停右侧「译」──► 发送 translate 消息 ──► 显示翻译结果
+         └─► 点击/悬停上方「×」──► 关闭悬浮按钮（支持触摸关闭）
 ```
 
 #### 关键函数
