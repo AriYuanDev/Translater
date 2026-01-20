@@ -66,6 +66,7 @@
   letter-spacing: -0.5px;
   background: linear-gradient(120deg, #2d3436 0%, #636e72 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -398,6 +399,15 @@
 
   .translator-word {
     color: #fff;
+    background: linear-gradient(120deg, #ffffff 0%, #e0e0e0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .translator-phonetic {
+    color: #d6b4fc;
+    background: rgba(214, 180, 252, 0.2);
   }
 
   .translator-definition {

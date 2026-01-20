@@ -663,3 +663,52 @@ body {
     transform: scale(1.05);
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
+
+/* ==================== 深色模式支持 ==================== */
+
+@media (prefers-color-scheme: dark) {
+
+    .translator-popup-content,
+    .translator-sentence-content {
+        background: rgba(26, 26, 46, 0.95);
+    }
+
+    .translator-word {
+        color: #fff;
+        background: linear-gradient(120deg, #ffffff 0%, #e0e0e0 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .translator-phonetic {
+        color: #d6b4fc;
+        background: rgba(214, 180, 252, 0.2);
+    }
+
+    .translator-definition {
+        color: #ccc;
+    }
+
+    .translator-translation {
+        color: #fff;
+    }
+
+    .translator-example {
+        color: #aaa;
+    }
+
+    .translator-result {
+        color: #fff;
+    }
+
+    .translator-close-btn {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ccc;
+    }
+
+    .translator-close-btn:hover {
+        background: #e74c3c;
+        color: white;
+    }
+}
