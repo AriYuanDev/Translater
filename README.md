@@ -23,6 +23,8 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 ### Features
 *   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation.
 *   **Smart Hover Actions**: Select text to see floating buttons (Pronounce / Translate). Close button positions smartly on top, supports hover-to-close.
+*   **English-Only Selection**: Floating buttons only appear when selected text is entirely English (no mixed Chinese-English triggers).
+*   **TTS Toggle Control**: Click the speak button again during playback to stop. Floating buttons stay visible until speech ends.
 *   **DeepL Integration**: Configuration for high-quality translations (My fallback: Google).
 *   **PDF Viewer**: Custom PDF viewer with built-in translation support.
 

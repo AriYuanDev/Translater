@@ -30,6 +30,13 @@
         return /[a-zA-Z]/.test(text);
     }
 
+    // 检测文本是否全部为英文（只包含英文字母、数字、常见标点和空格）
+    function isAllEnglish(text) {
+        // 允许：英文字母、数字、常见英文标点、空格
+        // 排除：中文、日文、韩文等非拉丁字符
+        return /^[a-zA-Z0-9\s.,!?;:'"\-()\[\]{}@#$%^&*+=<>/\\|`~]+$/.test(text);
+    }
+
     // HTML 转义函数，防止 XSS 攻击（优化版：单次遍历）
     function escapeHtml(text) {
         if (!text) return '';
@@ -37,9 +44,13 @@
         return String(text).replace(/[&<>"']/g, char => escapeMap[char]);
     }
 
-    // 使用 TTS 朗读文本（Web Speech API）
+    // 使用 TTS 朗读文本（Web Speech API）- 支持切换（再次点击停止）
     function speakText(text) {
-        window.speechSynthesis.cancel();
+        // 如果正在朗读，则停止
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            return;
+        }
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US'; // 美式英语
@@ -452,8 +463,8 @@
             return;
         }
 
-        // 只有选中的文本包含英文时才显示悬浮按钮
-        if (!containsEnglish(text)) {
+        // 只有选中的文本全部是英文时才显示悬浮按钮
+        if (!isAllEnglish(text)) {
             return;
         }
 
@@ -548,11 +559,23 @@
         // 鼠标悬停也触发关闭
         closeBtn.addEventListener('mouseenter', closeAction);
 
-        // 鼠标移出悬浮按钮容器后延迟隐藏
+        // 鼠标移出悬浮按钮容器后延迟隐藏（朗读中保持显示）
         currentFloatButtons.addEventListener('mouseleave', () => {
-            hideFloatButtonsTimeout = setTimeout(() => {
-                removeFloatButtons();
-            }, 500);
+            // 如果正在朗读，等朗读结束后再隐藏
+            if (window.speechSynthesis.speaking) {
+                const checkSpeaking = setInterval(() => {
+                    if (!window.speechSynthesis.speaking) {
+                        clearInterval(checkSpeaking);
+                        hideFloatButtonsTimeout = setTimeout(() => {
+                            removeFloatButtons();
+                        }, 300);
+                    }
+                }, 100);
+            } else {
+                hideFloatButtonsTimeout = setTimeout(() => {
+                    removeFloatButtons();
+                }, 500);
+            }
         });
 
         currentFloatButtons.addEventListener('mouseenter', () => {

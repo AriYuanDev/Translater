@@ -364,6 +364,13 @@ function containsEnglish(text) {
     return /[a-zA-Z]/.test(text);
 }
 
+// 检测文本是否全部为英文（只包含英文字母、数字、常见标点和空格）
+function isAllEnglish(text) {
+    // 允许：英文字母、数字、常见英文标点、空格
+    // 排除：中文、日文、韩文等非拉丁字符
+    return /^[a-zA-Z0-9\s.,!?;:'"\-()\[\]{}@#$%^&*+=<>/\\|`~]+$/.test(text);
+}
+
 // HTML 转义函数，防止 XSS 攻击
 function escapeHtml(text) {
     if (!text) return '';
@@ -372,9 +379,13 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 使用 TTS 朗读（优先 Piper p5712 高质量语音）
+// 使用 TTS 朗读（优先 Piper p5712 高质量语音）- 支持切换（再次点击停止）
 function speakText(text) {
-    window.speechSynthesis.cancel();
+    // 如果正在朗读，则停止
+    if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        return;
+    }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
@@ -673,8 +684,8 @@ function handleTextSelection(e) {
     // 单个英文单词由双击处理
     if (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) return;
 
-    // 只有选中的文本包含英文时才显示悬浮按钮
-    if (!containsEnglish(text)) return;
+    // 只有选中的文本全部是英文时才显示悬浮按钮
+    if (!isAllEnglish(text)) return;
 
     // 显示悬浮按钮
     floatButtons.style.display = 'flex';
@@ -743,11 +754,23 @@ function handleTextSelection(e) {
     newCloseBtn.addEventListener('click', closeAction);
     newCloseBtn.addEventListener('mouseenter', closeAction);
 
-    // 延迟隐藏
+    // 延迟隐藏（朗读中保持显示）
     floatButtons.onmouseleave = () => {
-        hideFloatButtonsTimeout = setTimeout(() => {
-            floatButtons.style.display = 'none';
-        }, 500);
+        // 如果正在朗读，等朗读结束后再隐藏
+        if (window.speechSynthesis.speaking) {
+            const checkSpeaking = setInterval(() => {
+                if (!window.speechSynthesis.speaking) {
+                    clearInterval(checkSpeaking);
+                    hideFloatButtonsTimeout = setTimeout(() => {
+                        floatButtons.style.display = 'none';
+                    }, 300);
+                }
+            }, 100);
+        } else {
+            hideFloatButtonsTimeout = setTimeout(() => {
+                floatButtons.style.display = 'none';
+            }, 500);
+        }
     };
 
     floatButtons.onmouseenter = () => {
