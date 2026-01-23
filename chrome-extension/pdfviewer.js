@@ -364,11 +364,17 @@ function containsEnglish(text) {
     return /[a-zA-Z]/.test(text);
 }
 
-// 检测文本是否全部为英文（只包含英文字母、数字、常见标点和空格）
+// 检测文本是否全部为英文（允许包含各种符号，排除中日韩字符）
 function isAllEnglish(text) {
-    // 允许：英文字母、数字、常见英文标点、空格
-    // 排除：中文、日文、韩文等非拉丁字符
-    return /^[a-zA-Z0-9\s.,!?;:'"\-()\[\]{}@#$%^&*+=<>/\\|`~]+$/.test(text);
+    // 排除：中文、日文、韩文字符及标点
+    // \u4e00-\u9fff: CJK 统一表意文字
+    // \u3400-\u4dbf: CJK 扩展 A
+    // \u3000-\u303f: CJK 符号和标点
+    // \u3040-\u309f: 平假名
+    // \u30a0-\u30ff: 片假名
+    // \uac00-\ud7af: 谚文音节
+    const cjkRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
+    return !cjkRegex.test(text);
 }
 
 // HTML 转义函数，防止 XSS 攻击
@@ -475,8 +481,8 @@ viewer.addEventListener('dblclick', async (e) => {
 
     hideAllPopups();
 
-    // 如果不是英文单词，直接返回
-    if (!word || !/^[a-zA-Z]+$/.test(word)) {
+    // 如果不是英文单词（使用 isAllEnglish 以支持包含符号的单词，如 Wide-Angle, 170°）
+    if (!word || !isAllEnglish(word)) {
         return;
     }
 
