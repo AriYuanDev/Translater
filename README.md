@@ -26,7 +26,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 *   **English-Only Selection**: Floating buttons only appear when selected text is entirely English (no mixed Chinese-English triggers).
 *   **TTS Toggle Control**: Click the speak button again during playback to stop. Floating buttons stay visible until speech ends.
 *   **DeepL Integration**: Configuration for high-quality translations (My fallback: Google).
-*   **PDF Viewer**: Custom PDF viewer with built-in translation support.
+*   **PDF Viewer**: Custom PDF viewer with built-in translation support. Supports sidebar TOC (Table of Contents) and filename in tab title.
 
 ### Installation
 1.  Open Chrome → `chrome://extensions/`

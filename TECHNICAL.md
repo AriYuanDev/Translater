@@ -178,6 +178,33 @@ function buildMWAudioUrl(audioFileName) {
 
 ---
 
+### 3. pdfviewer.js - PDF 阅读器
+
+#### 功能职责
+
+- 使用 PDF.js 渲染 PDF 文档
+- **双击取词**：在 PDF 画布上监听双击事件，触发翻译
+- **侧边栏目录**：递归渲染 PDF 大纲（TOC），支持跳转
+- **深度限制**：目录仅显示前两级（Level 0, 1），保持界面整洁
+
+#### 关键函数
+
+```javascript
+// PDF 加载
+async function loadPdf(url)
+async function renderAllPages()
+
+// 目录渲染
+async function renderOutline()
+async function createOutlineTree(items, level) // 递归构建，depth limited > 1
+
+// 交互
+function scrollToPage(pageNum)
+function speakText(text) // 复用 content.js 的朗读逻辑
+```
+
+---
+
 ## 消息通信
 
 content.js 与 background.js 通过 Chrome Message API 通信：

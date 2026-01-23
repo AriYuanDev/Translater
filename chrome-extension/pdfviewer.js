@@ -18,6 +18,9 @@ const zoomLevelSpan = document.getElementById('zoomLevel');
 const pdfTitleSpan = document.getElementById('pdfTitle');
 const translatorPopup = document.getElementById('translatorPopup');
 const floatButtons = document.getElementById('floatButtons');
+const sidebar = document.getElementById('sidebar');
+const outlineContainer = document.getElementById('outlineContainer');
+const sidebarToggle = document.getElementById('sidebarToggle');
 
 // ==================== PDF 加载与渲染 ====================
 
@@ -43,7 +46,12 @@ async function loadPdf(url) {
 
         // 更新 UI
         totalPagesSpan.textContent = pdfDoc.numPages;
-        pdfTitleSpan.textContent = decodeURIComponent(url.split('/').pop().split('?')[0]);
+        const filename = decodeURIComponent(url.split('/').pop().split('?')[0]);
+        pdfTitleSpan.textContent = filename;
+        document.title = filename; // 更新标签页标题
+
+        // 渲染目录
+        await renderOutline();
 
         // 设置默认缩放为 190%
         await setDefaultZoom();
@@ -349,6 +357,84 @@ viewerContainer.addEventListener('scroll', () => {
         }
     }
 });
+
+// ==================== 侧边栏与目录 ====================
+
+// 切换侧边栏
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    viewerContainer.classList.toggle('sidebar-open');
+});
+
+// 渲染目录
+async function renderOutline() {
+    try {
+        const outline = await pdfDoc.getOutline();
+        outlineContainer.innerHTML = '';
+
+        if (!outline || outline.length === 0) {
+            outlineContainer.innerHTML = '<div class="outline-empty">暂无目录</div>';
+            return;
+        }
+
+        // 递归渲染目录树
+        async function createOutlineTree(items, level = 0) {
+            const fragment = document.createDocumentFragment();
+
+            // 限制显示的层级深度，只显示前一级
+            // 如果需要显示更多层级，可以调整这个限制
+            if (level > 1) {
+                return fragment;
+            }
+
+            for (const item of items) {
+                const div = document.createElement('div');
+                div.className = `outline-item level-${level}`;
+                div.textContent = item.title;
+                div.title = item.title; // 悬浮显示完整标题
+
+                div.addEventListener('click', async () => {
+                    // 高亮当前选中项
+                    document.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+
+                    if (item.dest) {
+                        // 跳转到目标位置
+                        // item.dest 可能是 string (Named Destination) 或 array (Explicit Destination)
+                        let dest = item.dest;
+                        if (typeof dest === 'string') {
+                            dest = await pdfDoc.getDestination(dest);
+                        }
+
+                        if (Array.isArray(dest)) {
+                            // dest[0] 是页面的 Ref
+                            const pageIndex = await pdfDoc.getPageIndex(dest[0]);
+                            // 页码从 1 开始
+                            scrollToPage(pageIndex + 1);
+                        }
+                    } else if (item.url) {
+                        // 外部链接
+                        window.open(item.url, '_blank');
+                    }
+                });
+
+                fragment.appendChild(div);
+
+                if (item.items && item.items.length > 0) {
+                    fragment.appendChild(await createOutlineTree(item.items, level + 1));
+                }
+            }
+
+            return fragment;
+        }
+
+        outlineContainer.appendChild(await createOutlineTree(outline));
+
+    } catch (error) {
+        console.error('获取目录失败:', error);
+        outlineContainer.innerHTML = '<div class="outline-empty">获取目录失败</div>';
+    }
+}
 
 // ==================== 翻译功能 ====================
 

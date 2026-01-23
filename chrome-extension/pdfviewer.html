@@ -12,6 +12,11 @@
 <body>
     <div class="pdf-toolbar">
         <div class="toolbar-left">
+            <button id="sidebarToggle" class="toolbar-btn" title="查看目录">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+                </svg>
+            </button>
             <button id="prevPage" class="toolbar-btn" title="上一页">
                 <svg viewBox="0 0 24 24">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -51,6 +56,14 @@
                     <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
                 </svg>
             </button>
+        </div>
+    </div>
+
+    <!-- 侧边栏 -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">目录</div>
+        <div id="outlineContainer" class="outline-container">
+            <div class="outline-empty">暂无目录</div>
         </div>
     </div>
 
