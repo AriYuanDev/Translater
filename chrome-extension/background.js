@@ -38,27 +38,26 @@ function setCachedDictionary(word, data) {
 // 检查 URL 是否是 PDF
 function isPdfUrl(url) {
   if (!url) return false;
-  const urlLower = url.toLowerCase();
-  // 检查 URL 路径是否以 .pdf 结尾
   try {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname.toLowerCase();
-    return pathname.endsWith('.pdf');
+    // 基础检查：以 .pdf 结尾
+    if (pathname.endsWith('.pdf')) return true;
+    // 进阶检查：URL 路径中包含 pdf 且位于末端路径段（如 /docs/file.pdf?query=1）
+    const pathSegments = pathname.split('/');
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    return lastSegment.includes('.pdf');
   } catch {
-    return urlLower.includes('.pdf');
+    return url.toLowerCase().includes('.pdf');
   }
 }
 
 // 监听页面导航，检测 PDF 并重定向
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-  // 只处理主框架
   if (details.frameId !== 0) return;
-
-  // 不处理已经是我们的 PDF 查看器的 URL
   if (details.url.includes('pdfviewer.html')) return;
 
   if (isPdfUrl(details.url)) {
-    // 重定向到自定义 PDF 查看器
     const viewerUrl = chrome.runtime.getURL('pdfviewer.html') + '?url=' + encodeURIComponent(details.url);
     chrome.tabs.update(details.tabId, { url: viewerUrl });
   }
@@ -66,91 +65,52 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 
 // 监听来自 content script 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'fetchDictionary') {
-    fetchDictionary(request.word)
-      .then(data => sendResponse({ success: true, data }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // 保持消息通道开放
-  }
+  const handlers = {
+    fetchDictionary: () => fetchDictionary(request.word),
+    translate: () => translateText(request.text, request.targetLang || 'zh-CN'),
+    setDeepLApiKey: () => setDeepLApiKey(request.apiKey),
+    getDeepLApiKey: () => getDeepLApiKey().then(apiKey => ({ apiKey: apiKey ? '已配置' : '' })),
+    getTranslationEngine: () => getDeepLApiKey().then(apiKey => ({ engine: apiKey ? 'DeepL' : 'Google' })),
+    setMWApiKey: () => setMWApiKey(request.apiKey),
+    getMWApiKey: () => getMWApiKey().then(apiKey => ({ apiKey: apiKey ? '已配置' : '' }))
+  };
 
-  if (request.action === 'translate') {
-    translateText(request.text, request.targetLang || 'zh-CN')
-      .then(data => sendResponse({ success: true, data }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-
-  // DeepL API 密钥管理
-  if (request.action === 'setDeepLApiKey') {
-    setDeepLApiKey(request.apiKey)
-      .then(() => sendResponse({ success: true }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-
-  if (request.action === 'getDeepLApiKey') {
-    getDeepLApiKey()
-      .then(apiKey => sendResponse({ success: true, apiKey: apiKey ? '已配置' : '' }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-
-  if (request.action === 'getTranslationEngine') {
-    getDeepLApiKey()
-      .then(apiKey => sendResponse({ success: true, engine: apiKey ? 'DeepL' : 'Google' }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-
-  // Merriam-Webster API 密钥管理
-  if (request.action === 'setMWApiKey') {
-    setMWApiKey(request.apiKey)
-      .then(() => sendResponse({ success: true }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-
-  if (request.action === 'getMWApiKey') {
-    getMWApiKey()
-      .then(apiKey => sendResponse({ success: true, apiKey: apiKey ? '已配置' : '' }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+  if (handlers[request.action]) {
+    (async () => {
+      try {
+        const data = await handlers[request.action]();
+        sendResponse({ success: true, data: data || null });
+      } catch (error) {
+        console.error(`[Background] Action ${request.action} failed:`, error);
+        sendResponse({ success: false, error: error.message || '未知错误' });
+      }
+    })();
     return true;
   }
 });
 
 // ==================== Merriam-Webster API 配置 ====================
 
-// API Key 内存缓存（避免每次查询都读取 storage）
+// API Key 内存缓存
 let cachedMWApiKey = null;
 let mwApiKeyCacheTime = 0;
-const MW_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 分钟缓存
+const MW_KEY_CACHE_TTL = 5 * 60 * 1000;
 
-// 获取存储的 Merriam-Webster API 密钥（带内存缓存）
 async function getMWApiKey() {
-  // 检查内存缓存是否有效
   if (cachedMWApiKey !== null && Date.now() - mwApiKeyCacheTime < MW_KEY_CACHE_TTL) {
     return cachedMWApiKey;
   }
-
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(['mwApiKey'], (result) => {
-      cachedMWApiKey = result.mwApiKey || '';
-      mwApiKeyCacheTime = Date.now();
-      resolve(cachedMWApiKey);
-    });
-  });
+  const result = await chrome.storage.sync.get(['mwApiKey']);
+  cachedMWApiKey = result.mwApiKey || '';
+  mwApiKeyCacheTime = Date.now();
+  return cachedMWApiKey;
 }
 
-// 保存 Merriam-Webster API 密钥
 async function setMWApiKey(apiKey) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set({ mwApiKey: apiKey }, () => {
-      // 更新内存缓存
-      cachedMWApiKey = apiKey;
-      mwApiKeyCacheTime = Date.now();
-      resolve(true);
-    });
-  });
+  await chrome.storage.sync.set({ mwApiKey: apiKey });
+  cachedMWApiKey = apiKey;
+  mwApiKeyCacheTime = Date.now();
+  return true;
 }
 
 // 构造 Merriam-Webster 音频 URL
@@ -301,10 +261,10 @@ function parseMWLearnersResponse(data, word) {
   }
 
   return {
-    word: word,
-    phonetic: phonetic,
-    phonetics: phonetic || audioUrl ? [{ text: phonetic, audio: audioUrl }] : [],
-    meanings: meanings
+    word: word || '',
+    phonetic: phonetic || '',
+    phonetics: (phonetic || audioUrl) ? [{ text: phonetic, audio: audioUrl }] : [],
+    meanings: meanings || []
   };
 }
 
@@ -353,8 +313,8 @@ async function fetchDictionary(word) {
       // 解析 API 响应
       const result = parseMWLearnersResponse(data, word);
 
-      if (!result) {
-        throw new Error('未找到该单词');
+      if (!result || !result.meanings || result.meanings.length === 0) {
+        throw new Error('未找到该单词的详细释义');
       }
 
       // 存入缓存
@@ -377,20 +337,14 @@ async function fetchDictionary(word) {
 
 // 获取存储的 DeepL API 密钥
 async function getDeepLApiKey() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(['deepLApiKey'], (result) => {
-      resolve(result.deepLApiKey || '');
-    });
-  });
+  const result = await chrome.storage.sync.get(['deepLApiKey']);
+  return result.deepLApiKey || '';
 }
 
 // 保存 DeepL API 密钥
 async function setDeepLApiKey(apiKey) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set({ deepLApiKey: apiKey }, () => {
-      resolve(true);
-    });
-  });
+  await chrome.storage.sync.set({ deepLApiKey: apiKey });
+  return true;
 }
 
 // 语言代码转换（Chrome 语言代码 -> DeepL 语言代码）
@@ -420,9 +374,13 @@ function convertToDeepLLang(lang) {
 // 使用 DeepL 翻译文本
 async function translateWithDeepL(text, targetLang, apiKey) {
   const deepLLang = convertToDeepLLang(targetLang);
-  const url = 'https://api-free.deepl.com/v2/translate';
 
-  const response = await fetch(url, {
+  // 自动检测 Pro 或 Free 版本 API
+  // Free 版本密钥通常以 :fx 结尾
+  const isPro = !apiKey.endsWith(':fx');
+  const baseUrl = isPro ? 'https://api.deepl.com/v2/translate' : 'https://api-free.deepl.com/v2/translate';
+
+  const response = await fetch(baseUrl, {
     method: 'POST',
     headers: {
       'Authorization': `DeepL-Auth-Key ${apiKey}`,

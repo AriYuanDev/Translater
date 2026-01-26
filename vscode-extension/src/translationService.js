@@ -1,67 +1,27 @@
 const vscode = require('vscode');
-const https = require('https');
-const { URLSearchParams } = require('url');
 
 function getConfiguration(key) {
     return vscode.workspace.getConfiguration('translater').get(key) || '';
 }
 
-// Robust fetch wrapper with Redirect handling and safe timeout
-function fetchJson(url, options = {}, retries = 1) {
-    return new Promise((resolve, reject) => {
-        let isResolved = false;
-
-        const req = https.request(url, options, (res) => {
-            // Handle Redirects (301, 302, 307, 308)
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                if (retries > 0) {
-                    const redirectUrl = new URL(res.headers.location, url).toString();
-                    return resolve(fetchJson(redirectUrl, options, retries - 1));
-                }
-                if (!isResolved) {
-                    isResolved = true;
-                    return reject(new Error('Too many redirects'));
-                }
-            }
-
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                if (isResolved) return;
-                isResolved = true;
-
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) {
-                        reject(new Error('Invalid JSON response'));
-                    }
-                } else {
-                    reject(new Error(`Request failed with status ${res.statusCode}`));
-                }
-            });
+async function fetchJson(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            ...options,
+            // fetch automatically handles redirects by default
         });
 
-        req.on('error', (err) => {
-            if (!isResolved) {
-                isResolved = true;
-                reject(new Error(`Network error: ${err.message}`));
-            }
-        });
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
 
-        if (options.body) req.write(options.body);
-
-        // Safe timeout with flag check
-        req.setTimeout(10000, () => {
-            if (!isResolved) {
-                isResolved = true;
-                req.destroy();
-                reject(new Error('Request timed out'));
-            }
-        });
-
-        req.end();
-    });
+        return await response.json();
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out');
+        }
+        throw new Error(`Network error: ${error.message}`);
+    }
 }
 
 async function translateText(text, targetLang = 'ZH') {
@@ -77,23 +37,33 @@ async function translateWithDeepL(text, targetLang, apiKey) {
     const postData = new URLSearchParams({
         text: text,
         target_lang: targetLang
-    }).toString();
+    });
 
-    const options = {
-        method: 'POST',
-        headers: {
-            'Authorization': `DeepL-Auth-Key ${apiKey}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Content-Length': Buffer.byteLength(postData)
-        },
-        body: postData
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const data = await fetchJson(url, options);
-    if (data.translations && data.translations.length > 0) {
-        return data.translations[0].text;
+    try {
+        const options = {
+            method: 'POST',
+            headers: {
+                'Authorization': `DeepL-Auth-Key ${apiKey}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData.toString(),
+            signal: controller.signal
+        };
+
+        const data = await fetchJson(url, options);
+        clearTimeout(timeoutId);
+
+        if (data.translations && data.translations.length > 0) {
+            return data.translations[0].text;
+        }
+        throw new Error('DeepL format error');
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
     }
-    throw new Error('DeepL format error');
 }
 
 

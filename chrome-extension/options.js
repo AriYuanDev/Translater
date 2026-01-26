@@ -1,4 +1,4 @@
-// 快译 - 设置页面脚本
+import { sendMessageSafe } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // DeepL 相关元素
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (testResult.success) {
                 // 保存密钥
-                await chrome.runtime.sendMessage({
+                await sendMessageSafe({
                     action: 'setDeepLApiKey',
                     apiKey: apiKey
                 });
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 清除按钮
     clearBtn.addEventListener('click', async () => {
         if (confirm('确定要清除 DeepL API 密钥吗？清除后翻译功能将不可用。')) {
-            await chrome.runtime.sendMessage({
+            await sendMessageSafe({
                 action: 'setDeepLApiKey',
                 apiKey: ''
             });
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (testResult.success) {
                 // 保存密钥
-                await chrome.runtime.sendMessage({
+                await sendMessageSafe({
                     action: 'setMWApiKey',
                     apiKey: apiKey
                 });
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // MW 清除按钮
     clearMWBtn.addEventListener('click', async () => {
         if (confirm('确定要清除 Merriam-Webster API 密钥吗？清除后词典功能将不可用。')) {
-            await chrome.runtime.sendMessage({
+            await sendMessageSafe({
                 action: 'setMWApiKey',
                 apiKey: ''
             });
@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 加载 DeepL 当前状态
     async function loadCurrentStatus() {
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'getTranslationEngine' });
+            const response = await sendMessageSafe({ action: 'getTranslationEngine' });
 
             if (response.success) {
                 if (response.engine === 'DeepL') {
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 加载 MW 当前状态
     async function loadMWStatus() {
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'getMWApiKey' });
+            const response = await sendMessageSafe({ action: 'getMWApiKey' });
 
             if (response.success) {
                 if (response.apiKey) {
@@ -177,19 +177,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 测试 DeepL API 密钥
     async function testDeepLApiKey(apiKey) {
+        const isPro = !apiKey.endsWith(':fx');
+        const baseUrl = isPro ? 'https://api.deepl.com/v2/usage' : 'https://api-free.deepl.com/v2/usage';
+
         try {
-            const response = await fetch('https://api-free.deepl.com/v2/usage', {
-                headers: {
-                    'Authorization': `DeepL-Auth-Key ${apiKey}`
-                }
+            const response = await fetch(baseUrl, {
+                headers: { 'Authorization': `DeepL-Auth-Key ${apiKey}` }
             });
 
             if (response.ok) {
                 const data = await response.json();
-                console.log('DeepL 使用量:', data);
                 return { success: true, data };
             } else {
-                const error = await response.text();
                 return { success: false, error: `HTTP ${response.status}` };
             }
         } catch (error) {

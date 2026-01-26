@@ -43,10 +43,14 @@ Port of the "Fast Trans" extension for VS Code, enabling seamless translation wi
 ### Features
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
 
-### Installation (Development)
-1.  Open this folder in VS Code.
-2.  Run `npm install` in the root (or inside `vscode-extension` if managed separately).
-3.  Press `F5` to launch the **Extension Development Host**.
+### Installation (.vsix)
+1.  Download `translater-v1.3.1.vsix` from the project root.
+2.  In VS Code, open the Extensions view (`Ctrl+Shift+X`).
+3.  Click the **...** (Views and More Actions) menu and select **Install from VSIX...**.
+4.  Select the `.vsix` file.
+
+> [!NOTE]
+> If the file was downloaded with a `.zip` or `.pkg` extension due to system security settings, simply rename it back to `.vsix` before installing.
 
 ### Configuration
 You can configure API keys in VS Code Settings:
@@ -56,11 +60,20 @@ You can configure API keys in VS Code Settings:
 
 ## 🔧 Technology Stack
 
-| Feature | Chrome Extension | VS Code Extension |
+| Feature | Chrome Extension (Refactored) | VS Code Extension |
 | :--- | :--- | :--- |
-| **Runtime** | Browser JS (DOM) | Node.js / Webviews |
-| **Dictionary** | `fetch` (Background) | `https.request` (Node) |
-| **Storage** | `chrome.storage` | `vscode.workspace.getConfiguration` |
+| **Architecture** | **ES Modules (ESM) & Shadow DOM (Isolation)** | Node.js |
+| **Runtime** | Browser JS (DOM / Web Components) | VS Code API |
+| **Networking** | `fetch` (Service Worker) | `fetch` (Modern Node API) |
+| **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
+
+## 📝 Major Refactoring (Version 1.3.1 - 2026-01-26)
+
+The project underwent a significant architectural upgrade:
+*   **Shadow DOM Integration**: Chrome UI components are now completely isolated from page styles.
+*   **Modular Logic**: Common utilities extracted into a shared `utils.js` (ESM).
+*   **DeepL Pro Support**: Added support for both DeepL Free and Pro API keys.
+*   **Performance**: Improved TTS loading and storage access efficiency.
 
 ## 📝 License
 MIT

@@ -194,10 +194,14 @@
 
 /* 错误状态 */
 .translator-error {
-  color: #e74c3c;
+  color: #d63031;
+  background: rgba(214, 48, 49, 0.1);
+  border-radius: 10px;
   font-size: 14px;
   text-align: center;
   padding: 16px;
+  margin: 10px;
+  border: 1px solid rgba(214, 48, 49, 0.2);
 }
 
 /* ==================== 悬浮按钮样式 ==================== */
