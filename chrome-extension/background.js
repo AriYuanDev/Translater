@@ -7,8 +7,17 @@ const dictionaryCache = new Map();
 const CACHE_MAX_SIZE = 100;
 const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
 
-// 正在进行中的请求追踪（防止并发重复请求）
-const pendingDictionaryRequests = new Map();
+// 预加载缓存
+chrome.storage.local.get(['dictionaryCache'], (result) => {
+  if (result.dictionaryCache) {
+    result.dictionaryCache.forEach(([word, entry]) => {
+      if (Date.now() - entry.timestamp < CACHE_TTL) {
+        dictionaryCache.set(word, entry);
+      }
+    });
+    console.log(`[Background] 已加载 ${dictionaryCache.size} 条持久化缓存`);
+  }
+});
 
 function getCachedDictionary(word) {
   const cached = dictionaryCache.get(word);
@@ -20,18 +29,46 @@ function getCachedDictionary(word) {
   }
   if (cached) {
     dictionaryCache.delete(word); // 删除过期缓存
+    saveDictionaryCache();
   }
   return null;
 }
 
 function setCachedDictionary(word, data) {
-  // 如果缓存满了，删除最旧的
   if (dictionaryCache.size >= CACHE_MAX_SIZE) {
     const firstKey = dictionaryCache.keys().next().value;
     dictionaryCache.delete(firstKey);
   }
   dictionaryCache.set(word, { data, timestamp: Date.now() });
+  saveDictionaryCache();
 }
+
+function saveDictionaryCache() {
+  chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
+}
+// 正在进行中的请求追踪（防止并发重复请求）
+const pendingDictionaryRequests = new Map();
+
+// API Key 内存缓存
+let cachedMWApiKey = null;
+let cachedDeepLApiKey = null;
+
+// 初始化时预取 API Keys
+async function prefetchApiKeys() {
+  const result = await chrome.storage.sync.get(['mwApiKey', 'deepLApiKey']);
+  cachedMWApiKey = result.mwApiKey || '';
+  cachedDeepLApiKey = result.deepLApiKey || '';
+  console.log('[Background] API Keys 已预取');
+}
+prefetchApiKeys();
+
+// 监听 storage 变化同步缓存
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync') {
+    if (changes.mwApiKey) cachedMWApiKey = changes.mwApiKey.newValue;
+    if (changes.deepLApiKey) cachedDeepLApiKey = changes.deepLApiKey.newValue;
+  }
+});
 
 // ==================== PDF 重定向 ====================
 
@@ -91,25 +128,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // ==================== Merriam-Webster API 配置 ====================
 
-// API Key 内存缓存
-let cachedMWApiKey = null;
-let mwApiKeyCacheTime = 0;
-const MW_KEY_CACHE_TTL = 5 * 60 * 1000;
-
 async function getMWApiKey() {
-  if (cachedMWApiKey !== null && Date.now() - mwApiKeyCacheTime < MW_KEY_CACHE_TTL) {
-    return cachedMWApiKey;
-  }
+  if (cachedMWApiKey !== null) return cachedMWApiKey;
   const result = await chrome.storage.sync.get(['mwApiKey']);
   cachedMWApiKey = result.mwApiKey || '';
-  mwApiKeyCacheTime = Date.now();
   return cachedMWApiKey;
 }
 
 async function setMWApiKey(apiKey) {
   await chrome.storage.sync.set({ mwApiKey: apiKey });
   cachedMWApiKey = apiKey;
-  mwApiKeyCacheTime = Date.now();
   return true;
 }
 
@@ -314,7 +342,8 @@ async function fetchDictionary(word) {
       const result = parseMWLearnersResponse(data, word);
 
       if (!result || !result.meanings || result.meanings.length === 0) {
-        throw new Error('未找到该单词的详细释义');
+        console.log(`[Background] ${normalizedWord} 未找到详细释义，将尝试翻译流程`);
+        return null; // 返回 null 而不是抛出错误，触发 content.js 的翻译逻辑
       }
 
       // 存入缓存
@@ -337,8 +366,10 @@ async function fetchDictionary(word) {
 
 // 获取存储的 DeepL API 密钥
 async function getDeepLApiKey() {
+  if (cachedDeepLApiKey !== null) return cachedDeepLApiKey;
   const result = await chrome.storage.sync.get(['deepLApiKey']);
-  return result.deepLApiKey || '';
+  cachedDeepLApiKey = result.deepLApiKey || '';
+  return cachedDeepLApiKey;
 }
 
 // 保存 DeepL API 密钥

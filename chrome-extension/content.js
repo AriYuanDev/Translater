@@ -30,6 +30,14 @@
         getURLSafe
     } = utils;
 
+    // 预加载语音引擎
+    if (typeof speechSynthesis !== 'undefined') {
+        speechSynthesis.getVoices();
+        speechSynthesis.addEventListener('voiceschanged', () => {
+            console.log('[Translater] 语音引擎已就绪');
+        }, { once: true });
+    }
+
     // ==================== Shadow DOM 设置 ====================
 
     let shadowHost = null;
@@ -371,7 +379,7 @@
             currentFloatButtons.addEventListener('mouseenter', () => {
                 if (hideFloatButtonsTimeout) clearTimeout(hideFloatButtonsTimeout);
             });
-        }, 50);
+        }, 20);
     });
 
     async function translateSelection(text, x, y) {
