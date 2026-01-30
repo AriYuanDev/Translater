@@ -88,11 +88,13 @@ function createCloseButton(onClick) {
     return btn;
 }
 
-function createSpeakButton(text) {
+function createSpeakButton(onClick) {
     const btn = document.createElement('button');
     btn.className = 'translator-speak-btn';
     btn.innerHTML = createSpeakerSVG();
-    btn.onclick = (e) => { e.stopPropagation(); speakText(text); };
+    if (onClick) {
+        btn.onclick = (e) => { e.stopPropagation(); onClick(); };
+    }
     return btn;
 }
 
@@ -316,7 +318,7 @@ viewer.addEventListener('dblclick', async (e) => {
     const wSpan = document.createElement('span'); wSpan.className = 'translator-word'; wSpan.textContent = word;
     wInfo.appendChild(wSpan);
     header.appendChild(wInfo);
-    header.appendChild(createSpeakButton(word));
+    header.appendChild(createSpeakButton(() => speakText(word)));
     const meanings = document.createElement('div'); meanings.className = 'translator-meanings';
     const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = '正在查询...';
     meanings.appendChild(loading);
@@ -365,9 +367,14 @@ function updatePopupWithData(data, word) {
     if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
     header.appendChild(info);
     const best = data.phonetics?.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')))?.audio;
-    const sBtn = createSpeakButton(word);
-    if (best) sBtn.onclick = (e) => { e.stopPropagation(); new Audio(best).play().catch(() => speakText(word)); };
-    header.appendChild(sBtn);
+    const speakHandler = () => {
+        if (best) {
+            new Audio(best).play().catch(() => speakText(word));
+        } else {
+            speakText(word);
+        }
+    };
+    header.appendChild(createSpeakButton(speakHandler));
 
     const meaningsCont = document.createElement('div'); meaningsCont.className = 'translator-meanings';
     if (data.meanings?.length) {

@@ -80,15 +80,17 @@
         return btn;
     }
 
-    function createSpeakButton(textToSpeak) {
+    function createSpeakButton(onClick) {
         const btn = document.createElement('button');
         btn.className = 'translator-speak-btn';
         btn.title = '朗读';
         btn.innerHTML = createSpeakerSVG();
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            speakText(textToSpeak);
-        });
+        if (onClick) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onClick();
+            });
+        }
         return btn;
     }
 
@@ -138,7 +140,7 @@
         wordInfo.appendChild(wordSpan);
 
         header.appendChild(wordInfo);
-        header.appendChild(createSpeakButton(word));
+        header.appendChild(createSpeakButton(() => speakText(word)));
 
         const meanings = document.createElement('div');
         meanings.className = 'translator-meanings';
@@ -194,14 +196,15 @@
             audioUrl = best ? best.audio : (data.phonetics[0]?.audio || '');
         }
 
-        const speakBtn = createSpeakButton(word);
-        if (audioUrl) {
-            speakBtn.onclick = (e) => {
-                e.stopPropagation();
+        const speakHandler = () => {
+            if (audioUrl) {
                 new Audio(audioUrl).play().catch(() => speakText(word));
-            };
-        }
-        header.appendChild(speakBtn);
+            } else {
+                speakText(word);
+            }
+        };
+
+        header.appendChild(createSpeakButton(speakHandler));
 
         // Meanings
         const meaningsCont = document.createElement('div');

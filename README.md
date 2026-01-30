@@ -67,9 +67,10 @@ You can configure API keys in VS Code Settings:
 | **Networking** | `fetch` (Service Worker) | `fetch` (Modern Node API) |
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
-## 📝 Major Refactoring (Version 1.3.1 - 2026-01-26)
+## 📝 Major Refactoring (Version 1.3.1 - 2026-01-29)
 
-The project underwent a significant architectural upgrade:
+The project underwent a significant architectural upgrade and bug fixing:
+*   **Audio Bug Fix**: Resolved duplicate audio playback by unifying event handlers.
 *   **Shadow DOM Integration**: Chrome UI components are now completely isolated from page styles.
 *   **Modular Logic**: Common utilities extracted into a shared `utils.js` (ESM).
 *   **DeepL Pro Support**: Added support for both DeepL Free and Pro API keys.
