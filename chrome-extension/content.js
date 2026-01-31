@@ -313,19 +313,24 @@
             word: word.toLowerCase()
         });
 
-        if (!isContextValid()) return;
+        if (!isContextValid() || !currentPopup) return;
 
         if (response && response.success && response.data) {
             updatePopupWithData(response.data, word);
-            // Auto speak
-            const bestAudio = response.data.phonetics?.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')))?.audio;
+            // Auto speak: Use robust selection
+            const bestAudio = response.data.phonetics?.find(p => p.audio && (
+                p.audio.includes('us_pron') ||
+                p.audio.includes('-us') ||
+                p.audio.includes('merriam-webster.com')
+            ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+
             if (bestAudio) new Audio(bestAudio).play().catch(() => speakText(word));
             else speakText(word);
         } else if (response && response.error && (response.error.includes('更新') || response.error.includes('失效'))) {
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
-            if (!isContextValid()) return;
+            if (!isContextValid() || !currentPopup) return;
             if (trRes && trRes.success && trRes.data) {
                 const container = currentPopup.querySelector('.translator-meanings');
                 if (container) {
@@ -335,6 +340,8 @@
                     res.textContent = trRes.data.translated || '翻译结果为空';
                     container.appendChild(res);
                 }
+                // Auto speak for translation as well
+                speakText(word);
             } else {
                 updatePopupWithError(word, (trRes && trRes.error) || (response && response.error) || '查询失败');
             }

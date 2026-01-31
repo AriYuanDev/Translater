@@ -21,7 +21,7 @@ Translater/
 A concise and efficient Chrome translation plugin supporting double-click word translation, text selection hover, and local TTS.
 
 ### Features
-*   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation.
+*   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation. Now supports fallback to built-in TTS for translated words.
 *   **Smart Hover Actions**: Select text to see floating buttons (Pronounce / Translate). Close button positions smartly on top, supports hover-to-close.
 *   **English-Only Selection**: Floating buttons only appear when selected text is entirely English (no mixed Chinese-English triggers).
 *   **TTS Toggle Control**: Click the speak button again during playback to stop. Floating buttons stay visible until speech ends.
@@ -68,6 +68,10 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 版本历史 (Changelog)
+
+### [1.4.1] - 2026-01-31
+*   **自动发音增强**：优化了音频识别逻辑，特别是对 Merriam-Webster 音频 URL 的兼容性。同时，对于词典未命中的单词，现在也会自动触发翻译后的 TTS 朗读。
+*   **稳定性修复**：修复了双击翻译时可能的 `TypeError` 崩溃问题。通过在所有异步 `await` 后增加 `currentPopup` 的空值校验，解决了用户在响应返回前点击别处导致的竞态条件问题。
 
 ### [1.4.0] - 2026-01-31
 *   **UI 布局优化**：将双击单词翻译弹窗中的音标显示位置移动到单词下方，解决了长单词时的排版问题。

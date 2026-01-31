@@ -344,20 +344,27 @@ viewer.addEventListener('dblclick', async (e) => {
     currentPopup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'fetchDictionary', word: word.toLowerCase() });
-    if (!isContextValid()) return;
+    if (!isContextValid() || !currentPopup) return;
     if (response && response.success && response.data) {
         updatePopupWithData(response.data, word);
-        const best = response.data.phonetics?.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')))?.audio;
+        const best = response.data.phonetics?.find(p => p.audio && (
+            p.audio.includes('us_pron') ||
+            p.audio.includes('-us') ||
+            p.audio.includes('merriam-webster.com')
+        ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+
         if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
     } else if (response && response.error && (response.error.includes('更新') || response.error.includes('失效'))) {
         meanings.innerHTML = ''; const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${response.error}`; meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
-        if (!isContextValid()) return;
+        if (!isContextValid() || !currentPopup) return;
         meanings.innerHTML = '';
         if (tr && tr.success && tr.data) {
             const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || '翻译结果为空';
             meanings.appendChild(res);
+            // Auto speak for translation
+            speakText(word);
         } else {
             const errText = (tr && tr.error) || (response && response.error) || '查询失败';
             const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${errText}`;
@@ -380,7 +387,12 @@ function updatePopupWithData(data, word) {
     info.appendChild(w);
     if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
     header.appendChild(info);
-    const best = data.phonetics?.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')))?.audio;
+    const best = data.phonetics?.find(p => p.audio && (
+        p.audio.includes('us_pron') ||
+        p.audio.includes('-us') ||
+        p.audio.includes('merriam-webster.com')
+    ))?.audio || data.phonetics?.find(p => p.audio)?.audio;
+
     const speakHandler = () => {
         if (best) {
             new Audio(best).play().catch(() => speakText(word));

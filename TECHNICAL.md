@@ -1,8 +1,8 @@
 # 快译 技术手册 (Technical Documentation)
 
-> **版本**: 1.4.0 (Robustness & UI Refinement)  
+> **版本**: 1.4.1 (Audio Robustness & Race Condition Fix)  
 > **更新日期**: 2026-01-31
-> **主要改进**: 引入了 Shadow DOM 异步样式同步机制，优化了词典排版，并增强了 API 层并发保护与容错。
+> **主要改进**: 增强了自动发音识别逻辑，引入了对 Merriam-Webster 音频的全量支持，并解决了异步回调导致的 Shadow DOM 竞态条件错误。
 
 ## 1. 概述 (Overview)
 
@@ -36,6 +36,9 @@
 ### 3.2 UI 交互逻辑 (content.js)
 - **安全 DOM 链**: 抛弃 `innerHTML`，全量使用 `createElement` 链式调用，天然免疫 XSS 攻击。
 - **双击取词**: 自动识别英语单词，首选 Merriam-Webster Learners 词典，备选 DeepL 翻译。
+    - **稳健音频选择**: 将 MW 特有的音频 URL 纳入 `bestAudio` 识别路径，并增加对所有 phonetics 数组的 fallback 逻辑。
+    - **异步防御**: 在每个 `sendMessageSafe` (await) 调用后增加对 `currentPopup` 是否已被清理的哨兵检查，确保不会触发 `TypeError`。
+    - **全场景发音**: 在词典未命中转向翻译分支时，显式调用 TTS 驱动，确保「双击必读」。
 - **智能悬浮组**: 选中文本后动态计算最优位置，支持「划词即读」和「即时译」。
 
 ---
