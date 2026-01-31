@@ -1,8 +1,8 @@
 # 快译 技术手册 (Technical Documentation)
 
-> **版本**: 1.3.1 (Stability Patch)  
-> **更新日期**: 2026-01-26
-> **主要改进**: 增加了全链路 `undefined` 容错校验，彻底解决划词翻译时的静默崩溃问题。
+> **版本**: 1.4.0 (Robustness & UI Refinement)  
+> **更新日期**: 2026-01-31
+> **主要改进**: 引入了 Shadow DOM 异步样式同步机制，优化了词典排版，并增强了 API 层并发保护与容错。
 
 ## 1. 概述 (Overview)
 
@@ -17,19 +17,20 @@
 - **[utils.js](file:///utils.js)**: 容纳所有共享逻辑（安全消息传递、TTS 驱动、安全转义、坐标计算等）。
 - **动态导入**: 在 `content.js` 和 `pdfviewer.js` 中使用 `await import(chrome.runtime.getURL('utils.js'))` 实现即时加载。
 
-### 2.2 UI 隔离 (Shadow DOM)
-为了应对网页复杂的 CSS 环境，所有注入 UI 均采用 **Shadow DOM** (Closed Mode) 封装：
-- **隔离性**: 确保弹窗样式在任何网页（如 GitHub, Gmail）下均不会变形。
-- **一致性**: 通过在 Shadow Root 中动态插入 `styles.css`，保持主程序与 PDF 模式视效统一。
+### 2.2 UI 隔离与同步 (Shadow DOM)
+-   **样式同步**: 针对异步加载 `link` 标签导致的无样式内容闪烁 (FOUC) 风险，引入了基于 `Promise` 的样式等待机制。在 `ensureShadowRoot` 中挂载 `styles.css` 后，会监听 `onload` 事件，确保 UI 逻辑仅在 CSS 生效后执行。
+-   **隔离性**: 确保弹窗样式在任何网页（如 GitHub, Gmail）下均不会变形。
+-   **一致性**: PDF 查看器与普通网页共享相同的阴影根创建逻辑，保持视效统。
 
 ---
 
 ## 3. Chrome 扩展模块 (Chrome Extension)
 
 ### 3.1 background.js (后台大脑)
-- **API 智能检测**: 自动识别 DeepL Free (:fx) 与 Pro 密钥，动态切换 API 端点。
-- **并发保护**: 针对相同单词的并行请求进行锁定，防止重复消耗 API 额度。
-- **LRU 缓存**: 双级缓存机制（内存 + Storage），词典查询结果缓存 30 分钟。
+-   **API 智能检测**: 自动识别 DeepL Free (:fx) 与 Pro 密钥，动态切换 API 端点。
+-   **并发保护**: 引入 `pendingRequests` Map 追踪进行中的网络请求。针对同一文本的短时重复触发，自动执行 promise 复用，降低 API 成本。
+-   **响应容错**: 强制校验 `Content-Type: application/json`，防止在 API 返回错误 HTML 页面时触发 JSON 解析崩溃。
+-   **LRU 缓存**: 双级缓存机制（内存 + Storage），词典查询结果缓存 30 分钟。
 - **PDF 智能重定向**: 优化的正则算法，拦截符合 PDF 特征的导航并切换至定制阅读器。
 
 ### 3.2 UI 交互逻辑 (content.js)

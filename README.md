@@ -67,9 +67,16 @@ You can configure API keys in VS Code Settings:
 | **Networking** | `fetch` (Service Worker) | `fetch` (Modern Node API) |
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
-## 📝 Major Refactoring (Version 1.3.1 - 2026-01-29)
+## 📝 版本历史 (Changelog)
 
-The project underwent a significant architectural upgrade and bug fixing:
+### [1.4.0] - 2026-01-31
+*   **UI 布局优化**：将双击单词翻译弹窗中的音标显示位置移动到单词下方，解决了长单词时的排版问题。
+*   **消除 UI 闪烁 (FOUC)**：重构了 Shadow DOM 加载逻辑，现在会等待样式表加载完成后再渲染 UI，彻底解决了首次加载时的巨大符号闪烁问题。
+*   **PDF 阅读器同步**：将上述 UI 优化和闪烁修复同步到了内置 PDF 阅读器中，保证视觉一致。
+*   **API 健壮性加固**：后台脚本增加对 API 响应格式的校验及并发翻译请求保护。
+*   **生命周期安全**：在所有异步回调后增加了上下文有效性校验，防止在扩展更新时报错。
+
+### [1.3.1] - 2026-01-29
 *   **Audio Bug Fix**: Resolved duplicate audio playback by unifying event handlers.
 *   **Shadow DOM Integration**: Chrome UI components are now completely isolated from page styles.
 *   **Modular Logic**: Common utilities extracted into a shared `utils.js` (ESM).

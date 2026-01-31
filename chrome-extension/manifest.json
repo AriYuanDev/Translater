@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "快译 - 划词翻译助手",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "双击翻译单词显示美式音标，选中文本后悬浮按钮支持翻译和朗读，支持PDF文件，支持DeepL高质量翻译",
   "permissions": [
     "activeTab",

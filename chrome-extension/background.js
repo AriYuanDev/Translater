@@ -48,6 +48,7 @@ function saveDictionaryCache() {
 }
 // 正在进行中的请求追踪（防止并发重复请求）
 const pendingDictionaryRequests = new Map();
+const pendingTranslationRequests = new Map();
 
 // API Key 内存缓存
 let cachedMWApiKey = null;
@@ -298,7 +299,10 @@ function parseMWLearnersResponse(data, word) {
 
 // 获取词典数据 - 使用 Merriam-Webster Learners Dictionary API（带缓存和并发保护）
 async function fetchDictionary(word) {
-  const normalizedWord = word.toLowerCase();
+  if (!word || typeof word !== 'string' || !word.trim()) {
+    return null;
+  }
+  const normalizedWord = word.trim().toLowerCase();
 
   // 检查缓存
   const cached = getCachedDictionary(normalizedWord);
@@ -334,6 +338,13 @@ async function fetchDictionary(word) {
           throw new Error('API Key 无效或已过期');
         }
         throw new Error('词典服务暂时不可用');
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error(`[MW API] 返回了非 JSON 数据: ${text}`);
+        throw new Error('词典服务返回格式错误');
       }
 
       const data = await response.json();
@@ -423,10 +434,23 @@ async function translateWithDeepL(text, targetLang, apiKey) {
     })
   });
 
+  const contentType = response.headers.get('content-type');
+  const isJson = contentType && contentType.includes('application/json');
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('DeepL API 错误:', response.status, errorData);
-    throw new Error(`DeepL 翻译失败: ${response.status}`);
+    let errorMsg = `HTTP ${response.status}`;
+    if (isJson) {
+      const errorData = await response.json().catch(() => ({}));
+      errorMsg = errorData.message || errorMsg;
+    } else {
+      const errorText = await response.text().catch(() => '');
+      console.error('DeepL 非 JSON 错误响应:', errorText);
+    }
+    throw new Error(`DeepL 翻译失败: ${errorMsg}`);
+  }
+
+  if (!isJson) {
+    throw new Error('DeepL 词典服务返回格式错误');
   }
 
   const data = await response.json();
@@ -445,14 +469,29 @@ async function translateWithDeepL(text, targetLang, apiKey) {
 
 // 翻译文本（仅使用 DeepL）
 async function translateText(text, targetLang) {
+  if (!text || !text.trim()) return null;
   const apiKey = await getDeepLApiKey();
 
   if (!apiKey) {
     throw new Error('请先配置 DeepL API Key');
   }
 
-  console.log('[翻译] 使用 DeepL 引擎');
-  return await translateWithDeepL(text, targetLang, apiKey);
+  const cacheKey = `${targetLang}:${text.trim()}`;
+  if (pendingTranslationRequests.has(cacheKey)) {
+    return pendingTranslationRequests.get(cacheKey);
+  }
+
+  const requestPromise = (async () => {
+    try {
+      console.log('[翻译] 使用 DeepL 引擎');
+      return await translateWithDeepL(text, targetLang, apiKey);
+    } finally {
+      pendingTranslationRequests.delete(cacheKey);
+    }
+  })();
+
+  pendingTranslationRequests.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 // 扩展安装或更新时的处理

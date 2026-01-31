@@ -50,7 +50,10 @@ let currentPopup = null;
 let currentFloatButtons = null;
 let hideFloatButtonsTimeout = null;
 
-function ensureShadowRoot() {
+let stylesLoaded = false;
+let stylesLoadPromise = null;
+
+async function ensureShadowRoot() {
     if (!isContextValid()) return null;
     if (!shadowHost) {
         shadowHost = document.createElement('div');
@@ -66,7 +69,14 @@ function ensureShadowRoot() {
         styleLink.rel = 'stylesheet';
         styleLink.href = getURLSafe('styles.css');
         shadowRoot.appendChild(styleLink);
+
+        stylesLoadPromise = new Promise((resolve) => {
+            styleLink.onload = () => { stylesLoaded = true; resolve(); };
+            styleLink.onerror = () => { stylesLoaded = true; resolve(); };
+            setTimeout(() => { if (!stylesLoaded) { stylesLoaded = true; resolve(); } }, 500);
+        });
     }
+    if (stylesLoadPromise && !stylesLoaded) await stylesLoadPromise;
     return shadowRoot;
 }
 
@@ -304,7 +314,7 @@ viewer.addEventListener('dblclick', async (e) => {
     const word = window.getSelection().toString().trim();
     if (!word || !isAllEnglish(word)) return;
 
-    const root = ensureShadowRoot();
+    const root = await ensureShadowRoot();
     removeAllPopups();
     currentPopup = document.createElement('div');
     currentPopup.className = 'translator-popup';
@@ -315,6 +325,7 @@ viewer.addEventListener('dblclick', async (e) => {
     const header = document.createElement('div');
     header.className = 'translator-word-header';
     const wInfo = document.createElement('div');
+    wInfo.className = 'translator-word-info';
     const wSpan = document.createElement('span'); wSpan.className = 'translator-word'; wSpan.textContent = word;
     wInfo.appendChild(wSpan);
     header.appendChild(wInfo);
@@ -333,6 +344,7 @@ viewer.addEventListener('dblclick', async (e) => {
     currentPopup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'fetchDictionary', word: word.toLowerCase() });
+    if (!isContextValid()) return;
     if (response && response.success && response.data) {
         updatePopupWithData(response.data, word);
         const best = response.data.phonetics?.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')))?.audio;
@@ -341,6 +353,7 @@ viewer.addEventListener('dblclick', async (e) => {
         meanings.innerHTML = ''; const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${response.error}`; meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
+        if (!isContextValid()) return;
         meanings.innerHTML = '';
         if (tr && tr.success && tr.data) {
             const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || '翻译结果为空';
@@ -362,6 +375,7 @@ function updatePopupWithData(data, word) {
     content.innerHTML = '';
     const header = document.createElement('div'); header.className = 'translator-word-header';
     const info = document.createElement('div');
+    info.className = 'translator-word-info';
     const w = document.createElement('span'); w.className = 'translator-word'; w.textContent = word;
     info.appendChild(w);
     if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
@@ -393,14 +407,14 @@ function updatePopupWithData(data, word) {
     content.appendChild(header); content.appendChild(meaningsCont);
 }
 
-viewer.onmouseup = (e) => {
+viewer.onmouseup = async (e) => {
     if (!isContextValid()) return;
-    setTimeout(() => {
+    setTimeout(async () => {
         const text = window.getSelection().toString().trim();
         if (e.target.id === 'translator-extension-host') return;
         removeFloatButtons();
         if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
-        const root = ensureShadowRoot();
+        const root = await ensureShadowRoot();
         currentFloatButtons = document.createElement('div');
         currentFloatButtons.className = 'translator-float-buttons';
         const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', '朗读'); sBtn.onmouseenter = () => speakText(text);
@@ -432,6 +446,7 @@ async function translateSelection(text, x, y) {
     currentPopup.style.left = pos.left + 'px'; currentPopup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'translate', text });
+    if (!isContextValid()) return;
     if (response && response.success && response.data) {
         content.innerHTML = '';
         const res = document.createElement('div');

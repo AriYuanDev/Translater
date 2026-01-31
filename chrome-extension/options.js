@@ -185,11 +185,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Authorization': `DeepL-Auth-Key ${apiKey}` }
             });
 
-            if (response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (response.ok && contentType && contentType.includes('application/json')) {
                 const data = await response.json();
                 return { success: true, data };
             } else {
-                return { success: false, error: `HTTP ${response.status}` };
+                const errorText = !response.ok ? `HTTP ${response.status}` : '返回格式错误';
+                return { success: false, error: errorText };
             }
         } catch (error) {
             return { success: false, error: error.message };
@@ -202,7 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 用一个简单的单词测试
             const response = await fetch(`https://www.dictionaryapi.com/api/v3/references/learners/json/test?key=${apiKey}`);
 
-            if (response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (response.ok && contentType && contentType.includes('application/json')) {
                 const data = await response.json();
                 // 检查返回的是否是有效的词条数据
                 if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {

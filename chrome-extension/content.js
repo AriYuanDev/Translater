@@ -45,8 +45,10 @@
     let currentPopup = null;
     let currentFloatButtons = null;
     let hideFloatButtonsTimeout = null;
+    let stylesLoaded = false;
+    let stylesLoadPromise = null;
 
-    function ensureShadowRoot() {
+    async function ensureShadowRoot() {
         if (!isContextValid()) return null;
         if (!shadowHost) {
             shadowHost = document.createElement('div');
@@ -73,6 +75,31 @@
             styleLink.rel = 'stylesheet';
             styleLink.href = getURLSafe('styles.css');
             shadowRoot.appendChild(styleLink);
+
+            // Wait for styles to load to prevent FOUC (Flash of Unstyled Content)
+            stylesLoadPromise = new Promise((resolve) => {
+                styleLink.onload = () => {
+                    stylesLoaded = true;
+                    resolve();
+                };
+                styleLink.onerror = () => {
+                    // Even on error, mark as loaded to prevent blocking
+                    stylesLoaded = true;
+                    resolve();
+                };
+                // Fallback timeout in case onload doesn't fire
+                setTimeout(() => {
+                    if (!stylesLoaded) {
+                        stylesLoaded = true;
+                        resolve();
+                    }
+                }, 500);
+            });
+        }
+
+        // Wait for styles to be loaded before returning
+        if (stylesLoadPromise && !stylesLoaded) {
+            await stylesLoadPromise;
         }
         return shadowRoot;
     }
@@ -115,8 +142,8 @@
 
     // ==================== 翻译弹窗渲染 ====================
 
-    function showPopup(x, y, initialContent) {
-        const root = ensureShadowRoot();
+    async function showPopup(x, y, initialContent) {
+        const root = await ensureShadowRoot();
         removeAllPopups();
 
         currentPopup = document.createElement('div');
@@ -142,6 +169,7 @@
         header.className = 'translator-word-header';
 
         const wordInfo = document.createElement('div');
+        wordInfo.className = 'translator-word-info';
         const wordSpan = document.createElement('span');
         wordSpan.className = 'translator-word';
         wordSpan.textContent = word;
@@ -183,6 +211,7 @@
         header.className = 'translator-word-header';
 
         const wordInfo = document.createElement('div');
+        wordInfo.className = 'translator-word-info';
         const wordSpan = document.createElement('span');
         wordSpan.className = 'translator-word';
         wordSpan.textContent = word;
@@ -277,12 +306,14 @@
 
         if (!word || !isAllEnglish(word)) return;
 
-        showPopup(e.clientX, e.clientY, createLoadingPopup(word));
+        await showPopup(e.clientX, e.clientY, createLoadingPopup(word));
 
         const response = await sendMessageSafe({
             action: 'fetchDictionary',
             word: word.toLowerCase()
         });
+
+        if (!isContextValid()) return;
 
         if (response && response.success && response.data) {
             updatePopupWithData(response.data, word);
@@ -294,6 +325,7 @@
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
+            if (!isContextValid()) return;
             if (trRes && trRes.success && trRes.data) {
                 const container = currentPopup.querySelector('.translator-meanings');
                 if (container) {
@@ -324,7 +356,7 @@
 
     document.addEventListener('mouseup', (e) => {
         if (!isContextValid()) return;
-        setTimeout(() => {
+        setTimeout(async () => {
             const selection = window.getSelection();
             const text = selection.toString().trim();
 
@@ -333,7 +365,7 @@
 
             if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
 
-            const root = ensureShadowRoot();
+            const root = await ensureShadowRoot();
             currentFloatButtons = document.createElement('div');
             currentFloatButtons.className = 'translator-float-buttons';
 
@@ -384,7 +416,7 @@
 
     async function translateSelection(text, x, y) {
         removeFloatButtons();
-        const root = ensureShadowRoot();
+        const root = await ensureShadowRoot();
 
         currentPopup = document.createElement('div');
         currentPopup.className = 'translator-sentence-popup';
@@ -407,6 +439,7 @@
         currentPopup.style.top = pos.top + 'px';
 
         const response = await sendMessageSafe({ action: 'translate', text });
+        if (!isContextValid()) return;
         if (response && response.success && response.data) {
             content.innerHTML = '';
             const res = document.createElement('div');
