@@ -1,13 +1,13 @@
-// 快译 - Chrome 翻译扩展后台服务
+// Translater - Chrome Translation Extension Background Worker
 
-// ==================== 词典缓存 ====================
+// ==================== Dictionary Cache ====================
 
-// 简单的 LRU 缓存，最多存储 100 个单词，30 分钟过期
+// Simple LRU cache, stores up to 100 words, expires in 30 minutes
 const dictionaryCache = new Map();
 const CACHE_MAX_SIZE = 100;
-const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-// 预加载缓存
+// Preload cache from storage
 chrome.storage.local.get(['dictionaryCache'], (result) => {
   if (result.dictionaryCache) {
     result.dictionaryCache.forEach(([word, entry]) => {
@@ -15,20 +15,20 @@ chrome.storage.local.get(['dictionaryCache'], (result) => {
         dictionaryCache.set(word, entry);
       }
     });
-    console.log(`[Background] 已加载 ${dictionaryCache.size} 条持久化缓存`);
+    console.log(`[Background] Loaded ${dictionaryCache.size} persistent cache entries`);
   }
 });
 
 function getCachedDictionary(word) {
   const cached = dictionaryCache.get(word);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    // 移到末尾以实现 LRU
+    // Move to end for LRU implementation
     dictionaryCache.delete(word);
     dictionaryCache.set(word, cached);
     return cached.data;
   }
   if (cached) {
-    dictionaryCache.delete(word); // 删除过期缓存
+    dictionaryCache.delete(word); // Remove expired entry
     saveDictionaryCache();
   }
   return null;
@@ -46,24 +46,24 @@ function setCachedDictionary(word, data) {
 function saveDictionaryCache() {
   chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
 }
-// 正在进行中的请求追踪（防止并发重复请求）
+// Tracking active requests (prevent concurrent duplicate requests)
 const pendingDictionaryRequests = new Map();
 const pendingTranslationRequests = new Map();
 
-// API Key 内存缓存
+// API Key memory cache
 let cachedMWApiKey = null;
 let cachedDeepLApiKey = null;
 
-// 初始化时预取 API Keys
+// Prefetch API Keys on initialization
 async function prefetchApiKeys() {
   const result = await chrome.storage.sync.get(['mwApiKey', 'deepLApiKey']);
   cachedMWApiKey = result.mwApiKey || '';
   cachedDeepLApiKey = result.deepLApiKey || '';
-  console.log('[Background] API Keys 已预取');
+  console.log('[Background] API Keys prefetched');
 }
 prefetchApiKeys();
 
-// 监听 storage 变化同步缓存
+// Sync cache on storage changes
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync') {
     if (changes.mwApiKey) cachedMWApiKey = changes.mwApiKey.newValue;
@@ -71,17 +71,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// ==================== PDF 重定向 ====================
+// ==================== PDF Redirection ====================
 
-// 检查 URL 是否是 PDF
+// Check if URL is a PDF
 function isPdfUrl(url) {
   if (!url) return false;
   try {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname.toLowerCase();
-    // 基础检查：以 .pdf 结尾
+    // Basic check: ends with .pdf
     if (pathname.endsWith('.pdf')) return true;
-    // 进阶检查：URL 路径中包含 pdf 且位于末端路径段（如 /docs/file.pdf?query=1）
+    // Advanced check: URL path contains .pdf in the last segment
     const pathSegments = pathname.split('/');
     const lastSegment = pathSegments[pathSegments.length - 1];
     return lastSegment.includes('.pdf');
@@ -90,7 +90,7 @@ function isPdfUrl(url) {
   }
 }
 
-// 监听页面导航，检测 PDF 并重定向
+// Monitor navigation to detect and redirect PDFs
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
   if (details.url.includes('pdfviewer.html')) return;
@@ -101,16 +101,16 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   }
 });
 
-// 监听来自 content script 的消息
+// Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handlers = {
     fetchDictionary: () => fetchDictionary(request.word),
     translate: () => translateText(request.text, request.targetLang || 'zh-CN'),
     setDeepLApiKey: () => setDeepLApiKey(request.apiKey),
-    getDeepLApiKey: () => getDeepLApiKey().then(apiKey => ({ apiKey: apiKey ? '已配置' : '' })),
+    getDeepLApiKey: () => getDeepLApiKey().then(apiKey => ({ apiKey: apiKey ? 'Configured' : '' })),
     getTranslationEngine: () => getDeepLApiKey().then(apiKey => ({ engine: apiKey ? 'DeepL' : 'Google' })),
     setMWApiKey: () => setMWApiKey(request.apiKey),
-    getMWApiKey: () => getMWApiKey().then(apiKey => ({ apiKey: apiKey ? '已配置' : '' }))
+    getMWApiKey: () => getMWApiKey().then(apiKey => ({ apiKey: apiKey ? 'Configured' : '' }))
   };
 
   if (handlers[request.action]) {
@@ -120,14 +120,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, data: data || null });
       } catch (error) {
         console.error(`[Background] Action ${request.action} failed:`, error);
-        sendResponse({ success: false, error: error.message || '未知错误' });
+        sendResponse({ success: false, error: error.message || 'Unknown error' });
       }
     })();
     return true;
   }
 });
 
-// ==================== Merriam-Webster API 配置 ====================
+// ==================== Merriam-Webster API Configuration ====================
 
 async function getMWApiKey() {
   if (cachedMWApiKey !== null) return cachedMWApiKey;
@@ -142,11 +142,11 @@ async function setMWApiKey(apiKey) {
   return true;
 }
 
-// 构造 Merriam-Webster 音频 URL
+// Construct Merriam-Webster audio URL
 function buildMWAudioUrl(audioFileName) {
   if (!audioFileName) return '';
 
-  // 确定子目录
+  // Determine subdirectory
   let subdirectory;
   if (audioFileName.startsWith('bix')) {
     subdirectory = 'bix';
@@ -161,7 +161,7 @@ function buildMWAudioUrl(audioFileName) {
   return `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdirectory}/${audioFileName}.mp3`;
 }
 
-// 预编译的正则表达式（避免每次调用都重新编译）
+// Precompiled regexes (avoid recompiling on every call)
 const MW_REGEX_REMOVE = /\{(?:bc|it|\/it|b|\/b)\}/g;
 const MW_REGEX_QUOTES = /\{(?:ldquo|rdquo)\}/g;
 const MW_REGEX_SX = /\{sx\|[^}]*\}/g;
@@ -172,7 +172,7 @@ const MW_REGEX_D_LINK = /\{d_link\|([^|]*)\|[^}]*\}/g;
 const MW_REGEX_ALL_TAGS = /\{[^}]*\}/g;
 const MW_REGEX_WHITESPACE = /\s+/g;
 
-// 解析 Merriam-Webster API 返回的定义文本（去除标记）- 使用预编译正则
+// Parse Merriam-Webster definition text (remove tags) - uses precompiled regexes
 function parseMWDefinitionText(text) {
   if (!text) return '';
   return text
@@ -188,50 +188,53 @@ function parseMWDefinitionText(text) {
     .trim();
 }
 
-// 解析 Merriam-Webster Learners Dictionary API 响应
+// Parse Merriam-Webster Learners Dictionary API response
 function parseMWLearnersResponse(data, word) {
   if (!data || !Array.isArray(data) || data.length === 0) {
     return null;
   }
 
-  // 检查是否返回的是字符串数组（建议词）而不是词条
+  // Check if it returns a suggestions list instead of map entries
   if (typeof data[0] === 'string') {
-    console.log('[MW API] 返回建议词而非词条:', data.slice(0, 5));
+    console.log('[MW API] Returned suggestions instead of entry:', data.slice(0, 5));
     return null;
   }
 
   const entry = data[0];
 
-  // 提取音标和音频
+  // Extract original headword - remove digits after ID (e.g., support:1 -> support)
+  const apiWord = entry.meta?.id?.replace(/:\d+$/, '') || word;
+
+  // Extract phonetic and audio
   let phonetic = '';
   let audioUrl = '';
 
   if (entry.hwi && entry.hwi.prs && entry.hwi.prs.length > 0) {
     const pron = entry.hwi.prs[0];
-    // Learners Dictionary 使用 ipa 字段
+    // Learners Dictionary uses ipa field
     if (pron.ipa) {
       phonetic = `/${pron.ipa}/`;
     }
-    // 音频文件
+    // Audio file
     if (pron.sound && pron.sound.audio) {
       audioUrl = buildMWAudioUrl(pron.sound.audio);
     }
   }
 
-  // 提取词性
+  // Extract part of speech
   const partOfSpeech = entry.fl || 'word';
 
-  // 提取释义
+  // Extract definitions
   const meanings = [];
   const definitions = [];
 
   if (entry.shortdef && entry.shortdef.length > 0) {
-    // 使用 shortdef（简短定义）- 更适合快速查看
+    // Use shortdef (brief definitions) - better for quick view
     for (const def of entry.shortdef.slice(0, 3)) {
       definitions.push({ definition: def });
     }
   } else if (entry.def && entry.def.length > 0) {
-    // 使用完整定义
+    // Use full definitions
     for (const defBlock of entry.def.slice(0, 1)) {
       if (defBlock.sseq) {
         for (const senseSeq of defBlock.sseq.slice(0, 3)) {
@@ -259,12 +262,12 @@ function parseMWLearnersResponse(data, word) {
     });
   }
 
-  // 检查其他词条是否有不同词性
+  // Check other entries for different parts of speech
   for (let i = 1; i < Math.min(data.length, 3); i++) {
     const otherEntry = data[i];
     if (typeof otherEntry === 'string') continue;
 
-    // 检查是否是同一个词的不同词性
+    // Check if it's the same word with different POS
     const otherId = otherEntry.meta?.id?.replace(/:\d+$/, '') || '';
     if (otherId.toLowerCase() !== word.toLowerCase()) continue;
 
@@ -290,92 +293,93 @@ function parseMWLearnersResponse(data, word) {
   }
 
   return {
-    word: word || '',
+    word: apiWord || word,
+    searchedWord: word,
     phonetic: phonetic || '',
     phonetics: (phonetic || audioUrl) ? [{ text: phonetic, audio: audioUrl }] : [],
     meanings: meanings || []
   };
 }
 
-// 获取词典数据 - 使用 Merriam-Webster Learners Dictionary API（带缓存和并发保护）
+// Fetch dictionary data - Using Merriam-Webster Learners API (with cache and concurrency protection)
 async function fetchDictionary(word) {
   if (!word || typeof word !== 'string' || !word.trim()) {
     return null;
   }
   const normalizedWord = word.trim().toLowerCase();
 
-  // 检查缓存
+  // Check cache
   const cached = getCachedDictionary(normalizedWord);
   if (cached) {
-    console.log(`[缓存命中] ${normalizedWord}`);
+    console.log(`[Cache Hit] ${normalizedWord}`);
     return cached;
   }
 
-  // 检查是否有正在进行的相同请求（并发保护）
+  // Check for active identical request (concurrency protection)
   if (pendingDictionaryRequests.has(normalizedWord)) {
-    console.log(`[复用请求] ${normalizedWord}`);
+    console.log(`[Reusing Request] ${normalizedWord}`);
     return pendingDictionaryRequests.get(normalizedWord);
   }
 
-  // 创建新请求并追踪
+  // Create and track new request
   const requestPromise = (async () => {
     try {
-      // 获取 API Key
+      // Get API Key
       const apiKey = await getMWApiKey();
       if (!apiKey) {
-        throw new Error('请先配置 Merriam-Webster API Key');
+        throw new Error('Please configure Merriam-Webster API Key');
       }
 
-      // 调用 Merriam-Webster Learners Dictionary API
+      // Call Merriam-Webster Learners Dictionary API
       const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
 
-      console.log(`[MW API] 查询: ${normalizedWord}`);
+      console.log(`[MW API] Query: ${normalizedWord}`);
 
       const response = await fetch(url);
 
       if (!response.ok) {
         if (response.status === 403) {
-          throw new Error('API Key 无效或已过期');
+          throw new Error('API Key invalid or expired');
         }
-        throw new Error('词典服务暂时不可用');
+        throw new Error('Dictionary service temporarily unavailable');
       }
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
-        console.error(`[MW API] 返回了非 JSON 数据: ${text}`);
-        throw new Error('词典服务返回格式错误');
+        console.error(`[MW API] Returned non-JSON data: ${text}`);
+        throw new Error('Dictionary service returned invalid format');
       }
 
       const data = await response.json();
 
-      // 解析 API 响应
+      // Parse API response
       const result = parseMWLearnersResponse(data, word);
 
       if (!result || !result.meanings || result.meanings.length === 0) {
-        console.log(`[Background] ${normalizedWord} 未找到详细释义，将尝试翻译流程`);
-        return null; // 返回 null 而不是抛出错误，触发 content.js 的翻译逻辑
+        console.log(`[Background] ${normalizedWord} no definition found, falling back to translation`);
+        return null; // Return null instead of error to trigger fallback translation logic in content script
       }
 
-      // 存入缓存
+      // Put in cache
       setCachedDictionary(normalizedWord, result);
 
       return result;
     } finally {
-      // 无论成功失败，都从追踪表中移除
+      // Remove from tracking map regardless of success/error
       pendingDictionaryRequests.delete(normalizedWord);
     }
   })();
 
-  // 追踪此请求
+  // Track this request
   pendingDictionaryRequests.set(normalizedWord, requestPromise);
 
   return requestPromise;
 }
 
-// ==================== DeepL API 配置 ====================
+// ==================== DeepL API Configuration ====================
 
-// 获取存储的 DeepL API 密钥
+// Get stored DeepL API key
 async function getDeepLApiKey() {
   if (cachedDeepLApiKey !== null) return cachedDeepLApiKey;
   const result = await chrome.storage.sync.get(['deepLApiKey']);
@@ -383,13 +387,13 @@ async function getDeepLApiKey() {
   return cachedDeepLApiKey;
 }
 
-// 保存 DeepL API 密钥
+// Save DeepL API key
 async function setDeepLApiKey(apiKey) {
   await chrome.storage.sync.set({ deepLApiKey: apiKey });
   return true;
 }
 
-// 语言代码转换（Chrome 语言代码 -> DeepL 语言代码）
+// Language code conversion (Chrome -> DeepL)
 function convertToDeepLLang(lang) {
   const langMap = {
     'zh-CN': 'ZH',
@@ -413,12 +417,12 @@ function convertToDeepLLang(lang) {
   return langMap[lang] || lang.toUpperCase().split('-')[0];
 }
 
-// 使用 DeepL 翻译文本
+// Translate text using DeepL
 async function translateWithDeepL(text, targetLang, apiKey) {
   const deepLLang = convertToDeepLLang(targetLang);
 
-  // 自动检测 Pro 或 Free 版本 API
-  // Free 版本密钥通常以 :fx 结尾
+  // Auto-detect Pro or Free version API
+  // Free version keys usually end with :fx
   const isPro = !apiKey.endsWith(':fx');
   const baseUrl = isPro ? 'https://api.deepl.com/v2/translate' : 'https://api-free.deepl.com/v2/translate';
 
@@ -437,6 +441,7 @@ async function translateWithDeepL(text, targetLang, apiKey) {
   const contentType = response.headers.get('content-type');
   const isJson = contentType && contentType.includes('application/json');
 
+  // Handle non-JSON error response
   if (!response.ok) {
     let errorMsg = `HTTP ${response.status}`;
     if (isJson) {
@@ -444,13 +449,13 @@ async function translateWithDeepL(text, targetLang, apiKey) {
       errorMsg = errorData.message || errorMsg;
     } else {
       const errorText = await response.text().catch(() => '');
-      console.error('DeepL 非 JSON 错误响应:', errorText);
+      console.error('DeepL non-JSON error response:', errorText);
     }
-    throw new Error(`DeepL 翻译失败: ${errorMsg}`);
+    throw new Error(`DeepL Translation Failed: ${errorMsg}`);
   }
 
   if (!isJson) {
-    throw new Error('DeepL 词典服务返回格式错误');
+    throw new Error('DeepL service returned invalid format');
   }
 
   const data = await response.json();
@@ -464,16 +469,16 @@ async function translateWithDeepL(text, targetLang, apiKey) {
     };
   }
 
-  throw new Error('DeepL 返回数据格式错误');
+  throw new Error('DeepL returned invalid data format');
 }
 
-// 翻译文本（仅使用 DeepL）
+// Translate text (DeepL only)
 async function translateText(text, targetLang) {
   if (!text || !text.trim()) return null;
   const apiKey = await getDeepLApiKey();
 
   if (!apiKey) {
-    throw new Error('请先配置 DeepL API Key');
+    throw new Error('Please configure DeepL API Key');
   }
 
   const cacheKey = `${targetLang}:${text.trim()}`;
@@ -483,7 +488,7 @@ async function translateText(text, targetLang) {
 
   const requestPromise = (async () => {
     try {
-      console.log('[翻译] 使用 DeepL 引擎');
+      console.log('[Translation] Using DeepL engine');
       return await translateWithDeepL(text, targetLang, apiKey);
     } finally {
       pendingTranslationRequests.delete(cacheKey);
@@ -494,11 +499,11 @@ async function translateText(text, targetLang) {
   return requestPromise;
 }
 
-// 扩展安装或更新时的处理
+// Extension installation or update handling
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('快译扩展已安装');
+    console.log('Translater extension installed');
   } else if (details.reason === 'update') {
-    console.log('快译扩展已更新到版本', chrome.runtime.getManifest().version);
+    console.log('Translater extension updated to version', chrome.runtime.getManifest().version);
   }
 });

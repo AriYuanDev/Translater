@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "快译 - 划词翻译助手",
-  "version": "1.4.0",
-  "description": "双击翻译单词显示美式音标，选中文本后悬浮按钮支持翻译和朗读，支持PDF文件，支持DeepL高质量翻译",
+  "name": "Translater - Smart Translation Assistant",
+  "version": "1.4.1",
+  "description": "Double-click for dictionary, select for translation with DeepL support and PDF reader integration.",
   "permissions": [
     "activeTab",
     "webNavigation",
@@ -40,7 +40,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "快译设置"
+    "default_title": "Translater Settings"
   },
   "icons": {
     "16": "icons/icon16.png",

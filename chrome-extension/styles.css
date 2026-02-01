@@ -1,27 +1,28 @@
-/* 快译 - Chrome 翻译扩展样式 */
+/* Translater - Chrome Extension Styles */
 
-/* 翻译弹窗容器 */
-.translator-popup {
+/* Translation Popup Container */
+.translator-popup,
+.translator-sentence-popup {
   position: fixed;
   z-index: 2147483647;
-  max-width: 380px;
-  min-width: 300px;
-  /* 更丰富的流光渐变背景 */
-  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+  background: rgba(30, 30, 50, 0.75);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
-  /* 彩色环境光晕阴影 */
-  box-shadow:
-    0 10px 40px -10px rgba(161, 140, 209, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.4) inset;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  animation: popupFadeIn 0.15s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(161, 140, 209, 0.1);
+  width: 380px;
+  padding: 4px;
+  color: #f5f5f7;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  animation: translator-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
 
-@keyframes popupFadeIn {
+@keyframes translator-in {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(10px);
+    transform: scale(0.92) translateY(12px);
   }
 
   to {
@@ -30,23 +31,22 @@
   }
 }
 
-/* 弹窗内容区域 */
+/* Popup content area */
 .translator-popup-content {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(25px) saturate(180%);
   -webkit-backdrop-filter: blur(25px) saturate(180%);
-  margin: 3px;
+  margin: 0;
   border-radius: 17px;
-  padding: 20px 24px;
-  /* 恢复正常的 padding */
+  padding: 16px 18px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
-/* 单词标题区域 */
+/* Word Header Area */
 .translator-word-header {
   display: flex;
   align-items: center;
-  /* 保持与按钮对齐 */
+  /* Align with buttons */
   justify-content: space-between;
   margin-bottom: 16px;
   padding-bottom: 12px;
@@ -58,12 +58,12 @@
   background-position: bottom;
 }
 
-/* 单词与音标容器 */
+/* Word and Phonetic Container */
 .translator-word-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* 单词与音标的间距 */
+  /* Space between word and phonetic */
   flex: 1;
 }
 
@@ -83,7 +83,7 @@
   font-size: 14px;
   color: #8e44ad;
   margin-left: 0;
-  /* 重置左间距 */
+  /* Reset left margin */
   font-weight: 500;
   font-family: 'Menlo', 'Monaco', monospace;
   background: rgba(142, 68, 173, 0.1);
@@ -93,7 +93,7 @@
   width: fit-content;
 }
 
-/* 发音按钮 */
+/* Pronunciation Button */
 .translator-speak-btn {
   background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
   border: none;
@@ -124,7 +124,7 @@
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
 }
 
-/* 词义区域 */
+/* Meanings Area */
 .translator-meanings {
   margin-top: 12px;
 }
@@ -163,7 +163,39 @@
   line-height: 1.6;
 }
 
-/* 例句 */
+.translator-source-word {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-style: italic;
+}
+
+.translator-mini-speak {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  color: #00d4ff;
+  opacity: 0.6;
+  transition: all 0.2s;
+  display: inline-flex;
+}
+
+.translator-mini-speak:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.5));
+}
+
+.translator-mini-speak svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+/* Example Sentences */
 .translator-example {
   font-size: 13px;
   color: #777;
@@ -176,7 +208,7 @@
   border-radius: 0 4px 4px 0;
 }
 
-/* 加载状态 */
+/* Loading State */
 .translator-loading {
   display: flex;
   align-items: center;
@@ -204,7 +236,7 @@
   }
 }
 
-/* 错误状态 */
+/* Error State */
 .translator-error {
   color: #d63031;
   background: rgba(214, 48, 49, 0.1);
@@ -216,14 +248,14 @@
   border: 1px solid rgba(214, 48, 49, 0.2);
 }
 
-/* ==================== 悬浮按钮样式 ==================== */
+/* ==================== Floating Button Styles ==================== */
 
 .translator-float-buttons {
   position: fixed;
   z-index: 2147483646;
   display: flex;
   gap: 6px;
-  /* 移除背景，让按钮完全分离 */
+  /* Remove background for isolated buttons */
   background: transparent;
   padding: 0;
   border-radius: 0;
@@ -284,7 +316,7 @@
   transform: scale(0.95);
 }
 
-/* 工具提示 */
+/* Tooltips */
 .translator-float-btn::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -307,15 +339,15 @@
   opacity: 1;
 }
 
-/* 悬浮关闭按钮 */
+/* Close Floating Button */
 .translator-float-btn.close-floating-btn {
   position: absolute;
-  /* 绝对定位 */
+  /* Absolute positioning */
   left: 50%;
   margin-left: -12px;
-  /* 居中: 宽度24px的一半 */
+  /* Middle centering */
   top: -34px;
-  /* 移到上方 */
+  /* Move to top */
 
   background: rgba(100, 100, 100, 0.8);
   color: white;
@@ -332,29 +364,17 @@
   box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
 }
 
-/* ==================== 句子翻译弹窗 ==================== */
+/* ==================== Sentence Translation Popup ==================== */
 
-.translator-sentence-popup {
-  position: fixed;
-  z-index: 2147483647;
-  max-width: 450px;
-  min-width: 300px;
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  animation: popupFadeIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: hidden;
-}
+/* Custom sentence styles */
 
-/* 弹窗内容区域 */
+/* Popup Content Area */
 .translator-sentence-content {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  margin: 2px;
+  margin: 0;
   border-radius: 14px;
-  padding: 20px 24px;
-  /* 恢复正常 padding */
+  padding: 16px 20px;
 }
 
 .translator-original {
@@ -363,7 +383,7 @@
   margin-bottom: 10px;
   padding-bottom: 10px;
   padding-left: 20px;
-  /* 避开左上角关闭按钮 */
+  /* Avoid top-left close button */
   border-bottom: 1px solid rgba(17, 153, 142, 0.15);
   line-height: 1.5;
 }
@@ -374,15 +394,15 @@
   font-weight: 500;
   line-height: 1.6;
   padding-left: 20px;
-  /* 避开左上角关闭按钮 */
+  /* Avoid top-left close button */
 }
 
-/* 关闭按钮 */
+/* Close Button */
 .translator-close-btn {
   position: absolute;
   top: 8px;
   left: 8px;
-  /* 改为左上角 */
+  /* Top-left position */
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -396,7 +416,7 @@
   justify-content: center;
   transition: all 0.2s ease;
   z-index: 10;
-  /* 确保在内容之上 */
+  /* Ensure it's above content */
 }
 
 .translator-close-btn:hover {
@@ -405,7 +425,7 @@
   transform: scale(1.1);
 }
 
-/* 深色模式支持 */
+/* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
 
   .translator-popup-content,

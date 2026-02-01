@@ -37,12 +37,12 @@ function activate(context) {
                 });
             });
         } catch (error) {
-            if (error.message === '请先配置 DeepL API Key') {
+            if (error.message === 'Please configure DeepL API Key first') {
                 const selection = await vscode.window.showErrorMessage(
-                    'DeepL API Key 未配置，无法翻译。',
-                    '去配置'
+                    'DeepL API Key not configured. Translation disabled.',
+                    'Configure'
                 );
-                if (selection === '去配置') {
+                if (selection === 'Configure') {
                     vscode.commands.executeCommand('workbench.action.openSettings', 'translater.deepLApiKey');
                 }
             } else {

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>快译 - 设置</title>
+    <title>Translater - Settings</title>
     <style>
         * {
             margin: 0;
@@ -217,92 +217,92 @@
 
 <body>
     <div class="container">
-        <h1>⚡ 快译设置</h1>
-        <p class="subtitle">配置翻译引擎和 API 密钥</p>
+        <h1>⚡ Translater Settings</h1>
+        <p class="subtitle">Configure translation engines and API keys</p>
 
         <div class="card">
             <div class="card-title">
                 <span class="icon">🌐</span>
-                当前翻译引擎
+                Current Engine
             </div>
             <div id="currentEngine">
-                <span class="engine-badge google">⏳ 检测中...</span>
+                <span class="engine-badge google">⏳ Detecting...</span>
             </div>
         </div>
 
         <div class="card">
             <div class="card-title">
                 <span class="icon">🔑</span>
-                DeepL API 配置（翻译）
+                DeepL API Configuration
             </div>
 
             <div id="statusMessage" class="status hidden"></div>
 
             <div class="form-group">
-                <label for="apiKey">DeepL API 密钥</label>
-                <input type="password" id="apiKey" placeholder="输入你的 DeepL API 密钥...">
+                <label for="apiKey">DeepL API Key</label>
+                <input type="password" id="apiKey" placeholder="Enter your DeepL API key...">
                 <p class="hint">
-                    还没有密钥？<a href="https://www.deepl.com/pro-api" target="_blank">点击这里申请免费 API</a>
+                    No key? <a href="https://www.deepl.com/pro-api" target="_blank">Register for a free API key here</a>
                 </p>
             </div>
 
             <div class="actions">
-                <button class="btn btn-primary" id="saveBtn">保存密钥</button>
-                <button class="btn btn-secondary" id="clearBtn">清除密钥</button>
+                <button class="btn btn-primary" id="saveBtn">Save Key</button>
+                <button class="btn btn-secondary" id="clearBtn">Clear Key</button>
             </div>
         </div>
 
         <div class="card">
             <div class="card-title">
                 <span class="icon">📖</span>
-                Merriam-Webster 词典 API 配置
+                Merriam-Webster Dictionary API
             </div>
 
             <div id="mwStatusMessage" class="status hidden"></div>
 
             <div class="form-group">
-                <label for="mwApiKey">Merriam-Webster API 密钥</label>
-                <input type="password" id="mwApiKey" placeholder="输入你的 Merriam-Webster API 密钥...">
+                <label for="mwApiKey">Merriam-Webster API Key</label>
+                <input type="password" id="mwApiKey" placeholder="Enter your MW API key...">
                 <p class="hint">
-                    还没有密钥？<a href="https://dictionaryapi.com/register/index" target="_blank">点击这里免费注册</a>（选择 Learners
-                    Dictionary）
+                    No key? <a href="https://dictionaryapi.com/register/index" target="_blank">Register for free
+                        here</a> (Choose <b>Learners Dictionary</b>)
                 </p>
             </div>
 
             <div class="actions">
-                <button class="btn btn-primary" id="saveMWBtn">保存密钥</button>
-                <button class="btn btn-secondary" id="clearMWBtn">清除密钥</button>
+                <button class="btn btn-primary" id="saveMWBtn">Save Key</button>
+                <button class="btn btn-secondary" id="clearMWBtn">Clear Key</button>
             </div>
         </div>
 
         <div class="card">
             <div class="card-title">
                 <span class="icon">📊</span>
-                翻译引擎对比
+                Engine Comparison
             </div>
             <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <th style="text-align: left; padding: 12px 0; color: #888;">特性</th>
+                    <th style="text-align: left; padding: 12px 0; color: #888;">Feature</th>
                     <th style="text-align: center; padding: 12px 0; color: #00d4ff;">DeepL</th>
                     <th style="text-align: center; padding: 12px 0; color: #888;">Google</th>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">翻译质量</td>
+                    <td style="padding: 12px 0;">Quality</td>
                     <td style="text-align: center;">⭐⭐⭐⭐⭐</td>
                     <td style="text-align: center;">⭐⭐⭐</td>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">自然度</td>
+                    <td style="padding: 12px 0;">Fluency</td>
                     <td style="text-align: center;">⭐⭐⭐⭐⭐</td>
                     <td style="text-align: center;">⭐⭐⭐</td>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">免费额度</td>
-                    <td style="text-align: center;">50万字符/月</td>
-                    <td style="text-align: center;">无限制</td>
+                    <td style="padding: 12px 0;">Free Quota</td>
+                    <td style="text-align: center;">500k chars/mo</td>
+                    <td style="text-align: center;">Unlimited</td>
                 </tr>
                 <tr>
-                    <td style="padding: 12px 0;">需要 API 密钥</td>
+                    <td style="padding: 12px 0;">Requires API Key</td>
                     <td style="text-align: center;">✅</td>
                     <td style="text-align: center;">❌</td>
                 </tr>
@@ -310,7 +310,7 @@
         </div>
     </div>
 
-    <div class="toast" id="toast">✅ 设置已保存</div>
+    <div class="toast" id="toast">✅ Settings saved</div>
 
     <script type="module" src="options.js"></script>
 </body>

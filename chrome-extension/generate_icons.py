@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""生成 Chrome 扩展图标"""
+"""Generate Chrome Extension Icons"""
 
 from PIL import Image, ImageDraw, ImageFont
 import os
 
 def create_gradient(size, color1, color2):
-    """创建渐变背景"""
+    """Create gradient background"""
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
     for y in range(size):
         for x in range(size):
-            # 对角线渐变
+            # Diagonal gradient
             ratio = (x + y) / (2 * size)
             r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
             g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
@@ -21,36 +21,36 @@ def create_gradient(size, color1, color2):
     return img
 
 def create_rounded_rect_mask(size, radius):
-    """创建圆角矩形遮罩"""
+    """Create rounded rectangle mask"""
     mask = Image.new('L', (size, size), 0)
     draw = ImageDraw.Draw(mask)
     draw.rounded_rectangle([(0, 0), (size-1, size-1)], radius=radius, fill=255)
     return mask
 
 def create_icon(size, output_path):
-    """创建单个图标"""
-    # 渐变颜色
+    """Create a single icon"""
+    # Gradient colors
     color1 = (102, 126, 234)  # #667eea
     color2 = (118, 75, 162)   # #764ba2
     
-    # 创建渐变背景
+    # Create gradient background
     img = create_gradient(size, color1, color2)
     
-    # 应用圆角
+    # Apply rounded corners
     radius = size // 5
     mask = create_rounded_rect_mask(size, radius)
     
-    # 创建透明背景并粘贴圆角图像
+    # Create transparent background and paste rounded image
     result = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     result.paste(img, mask=mask)
     
-    # 添加文字 "译"
+    # Add text "T"
     draw = ImageDraw.Draw(result)
     
-    # 尝试使用系统字体
+    # Try to use system font
     font_size = int(size * 0.55)
     try:
-        # macOS 中文字体
+        # Try various fonts
         font = ImageFont.truetype('/System/Library/Fonts/PingFang.ttc', font_size)
     except:
         try:
@@ -58,26 +58,26 @@ def create_icon(size, output_path):
         except:
             font = ImageFont.load_default()
     
-    text = "译"
+    text = "T"
     
-    # 计算文字位置（居中）
+    # Calculate text position (centered)
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     x = (size - text_width) // 2
     y = (size - text_height) // 2 - bbox[1]
     
-    # 绘制白色文字
+    # Draw white text
     draw.text((x, y), text, fill=(255, 255, 255, 255), font=font)
     
-    # 保存
+    # Save
     result.save(output_path, 'PNG')
     print(f'Created: {output_path}')
 
 if __name__ == '__main__':
     icons_dir = 'icons'
     
-    # 生成三种尺寸的图标
+    # Generate icons of three sizes
     create_icon(16, os.path.join(icons_dir, 'icon16.png'))
     create_icon(48, os.path.join(icons_dir, 'icon48.png'))
     create_icon(128, os.path.join(icons_dir, 'icon128.png'))

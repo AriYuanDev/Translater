@@ -1,6 +1,6 @@
-# Translater / 快译
+# Translater - Smart Translation Assistant
 
-This repository contains two versions of the "Fast Trans" utility: a **Chrome Browser Extension** and a **VS Code Extension**.
+This repository contains two versions of the "Translater" utility: a **Chrome Browser Extension** and a **VS Code Extension**.
 
 Both extensions share core features like hover translation, PDF previewing, and high-quality dictionary lookups (DeepL / Merriam-Webster).
 
@@ -21,12 +21,13 @@ Translater/
 A concise and efficient Chrome translation plugin supporting double-click word translation, text selection hover, and local TTS.
 
 ### Features
-*   **Double-click Translation**: Instant popup with Merriam-Webster US pronunciation. Now supports fallback to built-in TTS for translated words.
-*   **Smart Hover Actions**: Select text to see floating buttons (Pronounce / Translate). Close button positions smartly on top, supports hover-to-close.
-*   **English-Only Selection**: Floating buttons only appear when selected text is entirely English (no mixed Chinese-English triggers).
-*   **TTS Toggle Control**: Click the speak button again during playback to stop. Floating buttons stay visible until speech ends.
-*   **DeepL Integration**: Configuration for high-quality translations (My fallback: Google).
-*   **PDF Viewer**: Custom PDF viewer with built-in translation support. Supports sidebar TOC (Table of Contents) and filename in tab title.
+*   **Dictionary Lookup**: Instant popup using Merriam-Webster API. Prioritizes professional audio recordings, falling back to high-quality AI TTS.
+*   **Morphed Word Support**: Intelligent recognition of word forms (plurals, past tense). Displays the origin word and provides specific pronunciation for the morphed variant.
+*   **Smart Hover Actions**: Selected text triggers a premium floating menu with "Translate" and "Speak" quick actions.
+*   **Premium Pro UI**: Sophisticated glassmorphism aesthetic with smooth animations, optimized for clarity and focus.
+*   **Fully Internationalized**: 100% English interface, error messaging, and documentation.
+*   **DeepL Integration**: Support for both DeepL Free and Pro APIs for superior sentence translation.
+*   **PDF Reader**: Advanced built-in PDF viewer with integrated translation tools, sidebar navigation, and full-screen support.
 
 ### Installation
 1.  Open Chrome → `chrome://extensions/`
@@ -38,7 +39,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 
 ## 💻 VS Code Extension
 
-Port of the "Fast Trans" extension for VS Code, enabling seamless translation within your editor.
+Port of the "Translater" extension for VS Code, enabling seamless translation within your editor.
 
 ### Features
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
@@ -67,18 +68,23 @@ You can configure API keys in VS Code Settings:
 | **Networking** | `fetch` (Service Worker) | `fetch` (Modern Node API) |
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
-## 📝 版本历史 (Changelog)
+## 📝 Changelog
 
-### [1.4.1] - 2026-01-31
-*   **自动发音增强**：优化了音频识别逻辑，特别是对 Merriam-Webster 音频 URL 的兼容性。同时，对于词典未命中的单词，现在也会自动触发翻译后的 TTS 朗读。
-*   **稳定性修复**：修复了双击翻译时可能的 `TypeError` 崩溃问题。通过在所有异步 `await` 后增加 `currentPopup` 的空值校验，解决了用户在响应返回前点击别处导致的竞态条件问题。
+### [1.4.1] - 2026-02-01
+*   **English Localization**: Removed all Chinese UI strings across the extension (popups, settings, viewer, logs) for a consistent international experience.
+*   **Premium UI Overhaul**: Implemented high-fidelity Glassmorphism design with `25px` blur, refined typography, and fluid `cubic-bezier` animations.
+*   **Refined Pronunciation Logic**: 
+    - Main speaker button now strictly prioritizes dictionary audio for the headword.
+    - Added a mini-speaker for morphed words (e.g., "running" → "run") using local TTS for the specific variant used in context.
+    - Double-clicking morphed words now automatically speaks the variant instead of the headword for better contextual feedback.
+*   **UI Polish**: Unified styles between the web content popups and the PDF reader. Improved layout for "from [origin]" labels using a more elegant italicized secondary style.
 
 ### [1.4.0] - 2026-01-31
-*   **UI 布局优化**：将双击单词翻译弹窗中的音标显示位置移动到单词下方，解决了长单词时的排版问题。
-*   **消除 UI 闪烁 (FOUC)**：重构了 Shadow DOM 加载逻辑，现在会等待样式表加载完成后再渲染 UI，彻底解决了首次加载时的巨大符号闪烁问题。
-*   **PDF 阅读器同步**：将上述 UI 优化和闪烁修复同步到了内置 PDF 阅读器中，保证视觉一致。
-*   **API 健壮性加固**：后台脚本增加对 API 响应格式的校验及并发翻译请求保护。
-*   **生命周期安全**：在所有异步回调后增加了上下文有效性校验，防止在扩展更新时报错。
+*   **Layout Optimization**: Moved phonetic symbols below the headword to prevent horizontal overflow for long words.
+*   **Zero FOUC (Flash of Unstyled Content)**: Refactored Shadow DOM loading sequence to ensure styles are fully parsed before UI rendering.
+*   **PDF Sync**: Brought all UI enhancements and bug fixes to the built-in PDF viewer.
+*   **API Robustness**: Added response format validation and concurrency protection for background API requests.
+*   **Lifecycle Safety**: Added context validity checks after async callbacks to prevent errors during extension updates.
 
 ### [1.3.1] - 2026-01-29
 *   **Audio Bug Fix**: Resolved duplicate audio playback by unifying event handlers.

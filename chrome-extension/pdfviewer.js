@@ -1,14 +1,14 @@
 /**
- * 快译 PDF 阅读器脚本 (Refactored)
+ * Translater PDF Reader Script
  */
 
-// 导入工具函数
+// Import utility functions
 let utils;
 try {
     const utilsUrl = chrome.runtime.getURL('utils.js');
     utils = await import(utilsUrl);
 } catch (e) {
-    console.log('[Translater] 扩展上下文已失效，请刷新页面');
+    console.log('[Translater] Extension context invalidated, please refresh the page');
 }
 
 const {
@@ -22,16 +22,16 @@ const {
     isContextValid
 } = utils || {};
 
-// PDF.js 配置
+// PDF.js configuration
 const pdfjsLib = await import('./pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 
-// 状态变量
+// State variables
 let pdfDoc = null;
 let currentScale = 1.0;
 let renderedPages = new Map();
 
-// DOM 元素
+// DOM Elements
 const viewer = document.getElementById('viewer');
 const viewerContainer = document.getElementById('viewerContainer');
 const currentPageInput = document.getElementById('currentPage');
@@ -42,7 +42,7 @@ const sidebar = document.getElementById('sidebar');
 const outlineContainer = document.getElementById('outlineContainer');
 const sidebarToggle = document.getElementById('sidebarToggle');
 
-// ==================== Shadow DOM 设置 (同步 content.js) ====================
+// ==================== Shadow DOM Setup (Synced with content.js) ====================
 
 let shadowHost = null;
 let shadowRoot = null;
@@ -108,7 +108,7 @@ function createSpeakButton(onClick) {
     return btn;
 }
 
-// ==================== PDF 加载与渲染 ====================
+// ==================== PDF Loading and Rendering ====================
 
 function getPdfUrl() {
     return new URLSearchParams(window.location.search).get('url');
@@ -130,13 +130,13 @@ async function loadPdf(url) {
         document.title = filename;
 
         await renderOutline();
-        currentScale = 1.9; // 默认 190%
+        currentScale = 1.9; // Default 190%
         updateZoomLevel();
         await renderAllPages();
         showLoading(false);
     } catch (error) {
-        console.error('加载 PDF 失败:', error);
-        showError('无法加载 PDF 文件，请检查 URL 是否正确。');
+        console.error('Failed to load PDF:', error);
+        showError('Unable to load PDF. Please check the URL.');
     }
 }
 
@@ -236,11 +236,11 @@ async function renderPageContent(pageNum, container) {
         });
     } catch (err) {
         console.error(err);
-        container.innerHTML = '<div style="padding:20px;color:red;">页面加载失败</div>';
+        container.innerHTML = '<div style="padding:20px;color:red;">Failed to load page</div>';
     }
 }
 
-// ==================== 工具栏与侧边栏 ====================
+// ==================== Toolbar and Sidebar ====================
 
 document.getElementById('prevPage').onclick = () => {
     const page = parseInt(currentPageInput.value);
@@ -281,7 +281,7 @@ async function renderOutline() {
     try {
         const outline = await pdfDoc.getOutline();
         outlineContainer.innerHTML = '';
-        if (!outline || outline.length === 0) { outlineContainer.textContent = '暂无目录'; return; }
+        if (!outline || outline.length === 0) { outlineContainer.textContent = 'No outline available'; return; }
 
         async function createTree(items, level = 0) {
             const fragment = document.createDocumentFragment();
@@ -304,10 +304,10 @@ async function renderOutline() {
             return fragment;
         }
         outlineContainer.appendChild(await createTree(outline));
-    } catch (e) { console.error(e); outlineContainer.textContent = '获取目录失败'; }
+    } catch (e) { console.error(e); outlineContainer.textContent = 'Failed to load outline'; }
 }
 
-// ==================== 翻译逻辑 (Shadow DOM) ====================
+// ==================== Translation Logic (Shadow DOM) ====================
 
 viewer.addEventListener('dblclick', async (e) => {
     if (!isContextValid()) return;
@@ -329,9 +329,12 @@ viewer.addEventListener('dblclick', async (e) => {
     const wSpan = document.createElement('span'); wSpan.className = 'translator-word'; wSpan.textContent = word;
     wInfo.appendChild(wSpan);
     header.appendChild(wInfo);
-    header.appendChild(createSpeakButton(() => speakText(word)));
+    header.appendChild(createSpeakButton(() => {
+        // The PDF viewer is usually loading here, maintain default behavior
+        speakText(word);
+    }));
     const meanings = document.createElement('div'); meanings.className = 'translator-meanings';
-    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = '正在查询...';
+    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = 'Searching...';
     meanings.appendChild(loading);
     content.appendChild(header); content.appendChild(meanings);
 
@@ -347,26 +350,34 @@ viewer.addEventListener('dblclick', async (e) => {
     if (!isContextValid() || !currentPopup) return;
     if (response && response.success && response.data) {
         updatePopupWithData(response.data, word);
-        const best = response.data.phonetics?.find(p => p.audio && (
-            p.audio.includes('us_pron') ||
-            p.audio.includes('-us') ||
-            p.audio.includes('merriam-webster.com')
-        ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+        const isMorphed = response.data.word && response.data.word.toLowerCase() !== word.toLowerCase();
 
-        if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
-    } else if (response && response.error && (response.error.includes('更新') || response.error.includes('失效'))) {
+        if (isMorphed) {
+            // Morphed word: Force AI speak for the variant
+            speakText(word);
+        } else {
+            // Standard word: Prioritize dictionary audio
+            const best = response.data.phonetics?.find(p => p.audio && (
+                p.audio.includes('us_pron') ||
+                p.audio.includes('-us') ||
+                p.audio.includes('merriam-webster.com')
+            ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+
+            if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
+        }
+    } else if (response && response.error && (response.error.includes('Update') || response.error.includes('invalidated'))) {
         meanings.innerHTML = ''; const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${response.error}`; meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
         if (!isContextValid() || !currentPopup) return;
         meanings.innerHTML = '';
         if (tr && tr.success && tr.data) {
-            const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || '翻译结果为空';
+            const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || 'No results';
             meanings.appendChild(res);
             // Auto speak for translation
             speakText(word);
         } else {
-            const errText = (tr && tr.error) || (response && response.error) || '查询失败';
+            const errText = (tr && tr.error) || (response && response.error) || 'Query failed';
             const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${errText}`;
             meanings.appendChild(err);
         }
@@ -375,7 +386,7 @@ viewer.addEventListener('dblclick', async (e) => {
 
 function updatePopupWithData(data, word) {
     if (!currentPopup || !data) {
-        console.error('[Translater] updatePopupWithData 收到无效数据:', data);
+        console.error('[Translater] updatePopupWithData received invalid data:', data);
         return;
     }
     const content = currentPopup.querySelector('.translator-popup-content');
@@ -383,8 +394,25 @@ function updatePopupWithData(data, word) {
     const header = document.createElement('div'); header.className = 'translator-word-header';
     const info = document.createElement('div');
     info.className = 'translator-word-info';
-    const w = document.createElement('span'); w.className = 'translator-word'; w.textContent = word;
+    const w = document.createElement('span');
+    w.className = 'translator-word';
+    w.textContent = data.word || word;
     info.appendChild(w);
+
+    // Show source word if it differs from the headword
+    if (data.word && word && data.word.toLowerCase() !== word.toLowerCase()) {
+        const sourceSpan = document.createElement('span');
+        sourceSpan.className = 'translator-source-word';
+        sourceSpan.textContent = `(from ${word}) `;
+
+        const miniBtn = document.createElement('span');
+        miniBtn.className = 'translator-mini-speak';
+        miniBtn.innerHTML = createSpeakerSVG();
+        miniBtn.onclick = (e) => { e.stopPropagation(); speakText(word); };
+        sourceSpan.appendChild(miniBtn);
+
+        info.appendChild(sourceSpan);
+    }
     if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
     header.appendChild(info);
     const best = data.phonetics?.find(p => p.audio && (
@@ -395,9 +423,9 @@ function updatePopupWithData(data, word) {
 
     const speakHandler = () => {
         if (best) {
-            new Audio(best).play().catch(() => speakText(word));
+            new Audio(best).play().catch(() => speakText(data.word || word));
         } else {
-            speakText(word);
+            speakText(data.word || word);
         }
     };
     header.appendChild(createSpeakButton(speakHandler));
@@ -415,7 +443,7 @@ function updatePopupWithData(data, word) {
             });
             meaningsCont.appendChild(item);
         });
-    } else { const empty = document.createElement('div'); empty.className = 'translator-definition'; empty.textContent = '暂无详细释义'; meaningsCont.appendChild(empty); }
+    } else { const empty = document.createElement('div'); empty.className = 'translator-definition'; empty.textContent = 'No detailed definitions found.'; meaningsCont.appendChild(empty); }
     content.appendChild(header); content.appendChild(meaningsCont);
 }
 
@@ -429,8 +457,8 @@ viewer.onmouseup = async (e) => {
         const root = await ensureShadowRoot();
         currentFloatButtons = document.createElement('div');
         currentFloatButtons.className = 'translator-float-buttons';
-        const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', '朗读'); sBtn.onmouseenter = () => speakText(text);
-        const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = '译'; tBtn.setAttribute('data-tooltip', '翻译'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
+        const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onmouseenter = () => speakText(text);
+        const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
         const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
         currentFloatButtons.append(sBtn, tBtn, cBtn);
         currentFloatButtons.style.pointerEvents = 'auto';
@@ -448,7 +476,7 @@ async function translateSelection(text, x, y) {
     removeFloatButtons(); const root = ensureShadowRoot();
     currentPopup = document.createElement('div'); currentPopup.className = 'translator-sentence-popup';
     const content = document.createElement('div'); content.className = 'translator-sentence-content';
-    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = '正在翻译...';
+    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = 'Translating...';
     content.appendChild(loading);
     currentPopup.appendChild(createCloseButton(removeAllPopups));
     currentPopup.appendChild(content);
@@ -463,10 +491,10 @@ async function translateSelection(text, x, y) {
         content.innerHTML = '';
         const res = document.createElement('div');
         res.className = 'translator-result';
-        res.textContent = response.data.translated || '翻译结果为空';
+        res.textContent = response.data.translated || 'No translation results';
         content.appendChild(res);
     } else {
-        content.textContent = `❌ ${(response && response.error) || '翻译失败'}`;
+        content.textContent = `❌ ${(response && response.error) || 'Translation failed'}`;
     }
 }
 
@@ -484,17 +512,17 @@ function showLoading(show) {
     let overlay = document.querySelector('.loading-overlay');
     if (show && !overlay) {
         overlay = document.createElement('div'); overlay.className = 'loading-overlay';
-        overlay.innerHTML = '<div class="loading-spinner"></div><div class="loading-text">正在加载 PDF...</div>';
+        overlay.innerHTML = '<div class="loading-spinner"></div><div class="loading-text">Loading PDF...</div>';
         document.body.appendChild(overlay);
     } else if (!show && overlay) overlay.remove();
 }
 
 function showError(message) {
     showLoading(false);
-    viewer.innerHTML = `<div class="error-container"><div class="error-icon">📄</div><div class="error-message">${escapeHtml(message)}</div><button class="error-retry-btn" id="retryBtn">重试</button></div>`;
+    viewer.innerHTML = `<div class="error-container"><div class="error-icon">📄</div><div class="error-message">${escapeHtml(message)}</div><button class="error-retry-btn" id="retryBtn">Retry</button></div>`;
     document.getElementById('retryBtn').onclick = () => location.reload();
 }
 
 const url = getPdfUrl();
-if (url) loadPdf(url); else showError('未指定 PDF 文件地址');
-console.log('快译 PDF 阅读器已加载 (Shadow DOM 版)');
+if (url) loadPdf(url); else showError('No PDF file specified');
+console.log('Translater PDF Reader Loaded (Shadow DOM)');

@@ -27,7 +27,7 @@ async function fetchJson(url, options = {}) {
 async function translateText(text, targetLang = 'ZH') {
     const apiKey = getConfiguration('deepLApiKey');
     if (!apiKey) {
-        throw new Error('请先配置 DeepL API Key');
+        throw new Error('Please configure DeepL API Key first');
     }
     return await translateWithDeepL(text, targetLang, apiKey);
 }

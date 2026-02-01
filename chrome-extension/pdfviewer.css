@@ -1,4 +1,4 @@
-/* 快译 PDF 阅读器样式 */
+/* Translater PDF Reader Styles */
 
 * {
     margin: 0;
@@ -14,7 +14,7 @@ body {
     overflow: hidden;
 }
 
-/* ==================== 工具栏 ==================== */
+/* ==================== Toolbar ==================== */
 
 .pdf-toolbar {
     display: flex;
@@ -114,9 +114,9 @@ body {
     white-space: nowrap;
 }
 
-/* ==================== PDF 查看器容器 ==================== */
+/* ==================== PDF Viewer Container ==================== */
 
-/* ==================== 侧边栏 ==================== */
+/* ==================== Sidebar ==================== */
 
 .sidebar {
     position: fixed;
@@ -183,10 +183,10 @@ body {
     color: #a18cd1;
     border-left: 3px solid #a18cd1;
     padding-left: 13px;
-    /* 补偿边框宽度 */
+    /* Compensate for border width */
 }
 
-/* 嵌套层级缩进 */
+/* Nested level indentation */
 .outline-item.level-1 {
     padding-left: 16px;
 }
@@ -207,7 +207,7 @@ body {
     padding-left: 80px;
 }
 
-/* 滚动条样式 */
+/* Scrollbar Styles */
 .outline-container::-webkit-scrollbar {
     width: 6px;
 }
@@ -225,7 +225,7 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
-/* ==================== PDF 查看器容器 ==================== */
+/* ==================== PDF Viewer Container ==================== */
 
 .viewer-container {
     position: fixed;
@@ -240,12 +240,44 @@ body {
     align-items: center;
     padding: 20px;
     transition: margin-left 0.3s ease;
-    /* 添加过渡效果 */
+    /* Add transition effect */
 }
 
-/* 侧边栏打开时挤压内容 */
+/* Push content when sidebar is open */
 .viewer-container.sidebar-open {
     margin-left: 260px;
+}
+
+.translator-source-word {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-style: italic;
+}
+
+.translator-mini-speak {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    color: #00d4ff;
+    opacity: 0.6;
+    transition: all 0.2s;
+    display: inline-flex;
+}
+
+.translator-mini-speak:hover {
+    opacity: 1;
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.5));
+}
+
+.translator-mini-speak svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
 }
 
 .pdf-viewer {
@@ -268,10 +300,10 @@ body {
     position: relative;
     z-index: 1;
     pointer-events: none;
-    /* 禁用 canvas 的鼠标事件，让文本层可以接收事件 */
+    /* Disable canvas mouse events, allowing text layer to receive events */
 }
 
-/* 文本层 - 用于选择文本 (PDF.js 4.x TextLayer) */
+/* Text Layer - for text selection (PDF.js 4.x TextLayer) */
 .textLayer {
     position: absolute;
     left: 0;
@@ -285,7 +317,7 @@ body {
     -moz-user-select: text;
     z-index: 2;
     cursor: text;
-    /* PDF.js 4.x 需要禁用文字大小调整 */
+    /* PDF.js 4.x requires disabling text size adjustment */
     -webkit-text-size-adjust: none;
     -moz-text-size-adjust: none;
     text-size-adjust: none;
@@ -298,7 +330,7 @@ body {
     white-space: pre;
     pointer-events: all;
     transform-origin: 0% 0%;
-    /* PDF.js 4.x 使用 left/top 百分比定位 */
+    /* PDF.js 4.x uses left/top percentage positioning */
 }
 
 .textLayer span.markedContent {
@@ -353,17 +385,17 @@ body {
     user-select: none;
 }
 
-/* ==================== 翻译弹窗样式（与 styles.css 保持一致） ==================== */
+/* ==================== Translator Popup Styles (consistent with styles.css) ==================== */
 
 .translator-popup {
     position: fixed;
     z-index: 2147483647;
     max-width: 380px;
     min-width: 300px;
-    /* 更丰富的流光渐变背景 - 与网页版一致 */
+    /* More rich flowing gradient background - consistent with web version */
     background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
     border-radius: 20px;
-    /* 彩色环境光晕阴影 */
+    /* Colorful ambient glow shadow */
     box-shadow:
         0 10px 40px -10px rgba(161, 140, 209, 0.5),
         0 0 0 1px rgba(255, 255, 255, 0.4) inset;
@@ -384,13 +416,14 @@ body {
     }
 }
 
+/* Popup content area */
 .translator-popup-content {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(25px) saturate(180%);
     -webkit-backdrop-filter: blur(25px) saturate(180%);
-    margin: 3px;
+    margin: 0;
     border-radius: 17px;
-    padding: 20px 24px;
+    padding: 16px 18px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
@@ -402,14 +435,14 @@ body {
     padding-bottom: 12px;
     padding-left: 20px;
     border-bottom: none;
-    /* 渐变分割线 */
+    /* Gradient separator line */
     background-image: linear-gradient(to right, rgba(161, 140, 209, 0.1), rgba(161, 140, 209, 0.6), rgba(161, 140, 209, 0.1));
     background-size: 100% 1px;
     background-repeat: no-repeat;
     background-position: bottom;
 }
 
-/* 单词与音标容器 */
+/* Word and Phonetic Container */
 .translator-word-info {
     display: flex;
     flex-direction: column;
@@ -556,39 +589,44 @@ body {
     padding: 16px;
 }
 
-.translator-close-btn {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(0, 0, 0, 0.05);
-    color: #666;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    z-index: 10;
+.translator-popup,
+.translator-sentence-popup {
+    position: fixed;
+    z-index: 2147483647;
+    background: rgba(30, 30, 50, 0.75);
+    backdrop-filter: blur(25px) saturate(200%);
+    -webkit-backdrop-filter: blur(25px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(161, 140, 209, 0.1);
+    width: 380px;
+    padding: 4px;
+    color: #f5f5f7;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    animation: translator-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
 }
 
-.translator-close-btn:hover {
-    background: #e74c3c;
-    color: white;
-    transform: scale(1.1);
+@keyframes translator-in {
+    from {
+        opacity: 0;
+        transform: scale(0.92) translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
-/* ==================== 悬浮按钮样式 ==================== */
+/* ==================== Floating Button Styles ==================== */
 
 .translator-float-buttons {
     position: fixed;
     z-index: 2147483646;
     display: flex;
     gap: 6px;
-    /* 移除背景，让按钮完全分离 */
+    /* Remove background for isolated buttons */
     background: transparent;
     padding: 0;
     border-radius: 0;
@@ -663,15 +701,15 @@ body {
     margin-bottom: 6px;
 }
 
-/* 悬浮关闭按钮 */
+/* Floating close button */
 .translator-float-btn.close-floating-btn {
     position: absolute;
-    /* 绝对定位 */
+    /* Absolute positioning */
     left: 50%;
     margin-left: -12px;
-    /* 居中: 宽度24px的一半 */
+    /* Centering: half of 24px width */
     top: -34px;
-    /* 移到上方 */
+    /* Move to top */
 
     background: rgba(100, 100, 100, 0.8);
     color: white;
@@ -692,7 +730,7 @@ body {
     opacity: 1;
 }
 
-/* ==================== 句子翻译弹窗 ==================== */
+/* ==================== Sentence Translation Popup ==================== */
 
 .translator-sentence-popup {
     position: fixed;
@@ -706,12 +744,13 @@ body {
     overflow: hidden;
 }
 
+/* Custom sentence styles */
 .translator-sentence-content {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
-    margin: 2px;
+    margin: 0;
     border-radius: 14px;
-    padding: 16px 18px;
+    padding: 16px 20px;
 }
 
 .translator-result {
@@ -721,7 +760,7 @@ body {
     line-height: 1.6;
 }
 
-/* ==================== 加载状态 ==================== */
+/* ==================== Loading State ==================== */
 
 .loading-overlay {
     position: fixed;
@@ -752,7 +791,7 @@ body {
     font-size: 16px;
 }
 
-/* ==================== 错误页面 ==================== */
+/* ==================== Error Page ==================== */
 
 .error-container {
     display: flex;
@@ -793,7 +832,7 @@ body {
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-/* ==================== 深色模式支持 ==================== */
+/* ==================== Dark Mode Support ==================== */
 
 @media (prefers-color-scheme: dark) {
 

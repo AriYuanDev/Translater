@@ -1,21 +1,21 @@
 /**
- * 快译 - Chrome 翻译扩展内容脚本 (Refactored)
+ * Translater - Chrome Extension Content Script
  */
 
 (async function () {
     'use strict';
 
-    // 防止重复注入
+    // Prevent duplicate injection
     if (window.__translatorExtensionLoaded) return;
     window.__translatorExtensionLoaded = true;
 
-    // 动态导入工具函数
+    // Dynamically import utility functions
     let utils;
     try {
         const utilsUrl = chrome.runtime.getURL('utils.js');
         utils = await import(utilsUrl);
     } catch (e) {
-        console.log('[Translater] 扩展上下文已失效，请刷新页面');
+        console.log('[Translater] Extension context invalidated, please refresh the page');
         return;
     }
 
@@ -30,15 +30,15 @@
         getURLSafe
     } = utils;
 
-    // 预加载语音引擎
+    // Preload speech engine
     if (typeof speechSynthesis !== 'undefined') {
         speechSynthesis.getVoices();
         speechSynthesis.addEventListener('voiceschanged', () => {
-            console.log('[Translater] 语音引擎已就绪');
+            console.log('[Translater] Speech engine ready');
         }, { once: true });
     }
 
-    // ==================== Shadow DOM 设置 ====================
+    // ==================== Shadow DOM Setup ====================
 
     let shadowHost = null;
     let shadowRoot = null;
@@ -53,7 +53,7 @@
         if (!shadowHost) {
             shadowHost = document.createElement('div');
             shadowHost.id = 'translator-extension-host';
-            // 设置 Host 为固定全屏但不可交互，仅其内部子元素可交互
+            // Set Host to fixed full screen but non-interactive, only its children are interactive
             Object.assign(shadowHost.style, {
                 position: 'fixed',
                 top: '0',
@@ -104,12 +104,12 @@
         return shadowRoot;
     }
 
-    // ==================== UI 构建工具 (Safe DOM API) ====================
+    // ==================== UI Construction Tools (Safe DOM API) ====================
 
     function createCloseButton(onClick) {
         const btn = document.createElement('button');
         btn.className = 'translator-close-btn';
-        btn.title = '关闭';
+        btn.title = 'Close';
         btn.textContent = '×';
         btn.addEventListener('click', onClick);
         return btn;
@@ -118,7 +118,7 @@
     function createSpeakButton(onClick) {
         const btn = document.createElement('button');
         btn.className = 'translator-speak-btn';
-        btn.title = '朗读';
+        btn.title = 'Speak';
         btn.innerHTML = createSpeakerSVG();
         if (onClick) {
             btn.addEventListener('click', (e) => {
@@ -140,7 +140,7 @@
         }
     }
 
-    // ==================== 翻译弹窗渲染 ====================
+    // ==================== Translation Popup Rendering ====================
 
     async function showPopup(x, y, initialContent) {
         const root = await ensureShadowRoot();
@@ -148,12 +148,12 @@
 
         currentPopup = document.createElement('div');
         currentPopup.className = 'translator-popup';
-        currentPopup.style.pointerEvents = 'auto'; // 确保内容可点击
+        currentPopup.style.pointerEvents = 'auto'; // Ensure content is clickable
         currentPopup.appendChild(initialContent);
 
         root.appendChild(currentPopup);
 
-        // 初始定位使用固定宽度预估，避免 getBoundingClientRect 还没渲染出来
+        // Initial positioning using fixed width estimate, as getBoundingClientRect might not be rendered yet
         const pos = calculatePopupPosition(x, y, 350, 200);
         currentPopup.style.left = pos.left + 'px';
         currentPopup.style.top = pos.top + 'px';
@@ -182,7 +182,7 @@
         meanings.className = 'translator-meanings';
         const loading = document.createElement('div');
         loading.className = 'translator-loading';
-        loading.textContent = '正在查询...';
+        loading.textContent = 'Searching...';
         meanings.appendChild(loading);
 
         container.appendChild(header);
@@ -197,14 +197,14 @@
 
     function updatePopupWithData(data, word) {
         if (!currentPopup || !data) {
-            console.error('[Translater] updatePopupWithData 收到无效数据:', data);
+            console.error('[Translater] updatePopupWithData received invalid data:', data);
             return;
         }
 
         const container = currentPopup.querySelector('.translator-popup-content');
         if (!container) return;
 
-        container.innerHTML = ''; // 清空加载状态
+        container.innerHTML = ''; // Clear loading state
 
         // Header
         const header = document.createElement('div');
@@ -214,8 +214,28 @@
         wordInfo.className = 'translator-word-info';
         const wordSpan = document.createElement('span');
         wordSpan.className = 'translator-word';
-        wordSpan.textContent = word;
+        wordSpan.textContent = data.word || word;
         wordInfo.appendChild(wordSpan);
+
+        // Show source word if it differs from the headword
+        if (data.word && word && data.word.toLowerCase() !== word.toLowerCase()) {
+            const sourceSpan = document.createElement('span');
+            sourceSpan.className = 'translator-source-word';
+            sourceSpan.textContent = `(from ${word}) `;
+
+            // Add a mini speak button for the source word
+            const miniSpeakBtn = document.createElement('span');
+            miniSpeakBtn.className = 'translator-mini-speak';
+            miniSpeakBtn.innerHTML = createSpeakerSVG();
+            miniSpeakBtn.title = `Speak selected: ${word}`;
+            miniSpeakBtn.onclick = (e) => {
+                e.stopPropagation();
+                speakText(word);
+            };
+            sourceSpan.appendChild(miniSpeakBtn);
+
+            wordInfo.appendChild(sourceSpan);
+        }
 
         if (data.phonetic) {
             const phoneticSpan = document.createElement('span');
@@ -235,9 +255,9 @@
 
         const speakHandler = () => {
             if (audioUrl) {
-                new Audio(audioUrl).play().catch(() => speakText(word));
+                new Audio(audioUrl).play().catch(() => speakText(data.word || word));
             } else {
-                speakText(word);
+                speakText(data.word || word);
             }
         };
 
@@ -275,14 +295,14 @@
         } else {
             const empty = document.createElement('div');
             empty.className = 'translator-definition';
-            empty.textContent = '暂无详细释义';
+            empty.textContent = 'No detailed definitions found.';
             meaningsCont.appendChild(empty);
         }
 
         container.appendChild(header);
         container.appendChild(meaningsCont);
 
-        // 仅在宽度大幅度变化导致溢出时重新对齐（可选），目前直接维持原位更平稳
+        // Realignment if width changes significantly (optional), currently maintaining position is smoother
     }
 
     function updatePopupWithError(word, message) {
@@ -297,7 +317,7 @@
         }
     }
 
-    // ==================== 事件监听 ====================
+    // ==================== Event Listeners ====================
 
     document.addEventListener('dblclick', async (e) => {
         if (!isContextValid()) return;
@@ -317,16 +337,25 @@
 
         if (response && response.success && response.data) {
             updatePopupWithData(response.data, word);
-            // Auto speak: Use robust selection
-            const bestAudio = response.data.phonetics?.find(p => p.audio && (
-                p.audio.includes('us_pron') ||
-                p.audio.includes('-us') ||
-                p.audio.includes('merriam-webster.com')
-            ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
 
-            if (bestAudio) new Audio(bestAudio).play().catch(() => speakText(word));
-            else speakText(word);
-        } else if (response && response.error && (response.error.includes('更新') || response.error.includes('失效'))) {
+            const isMorphed = response.data.word && response.data.word.toLowerCase() !== word.toLowerCase();
+
+            if (isMorphed) {
+                // Morphed word: Force AI speak for the variant
+                speakText(word);
+            } else {
+                // Standard word: prioritize dictionary audio
+                const bestAudio = response.data.phonetics?.find(p => p.audio && (
+                    p.audio.includes('us_pron') ||
+                    p.audio.includes('-us') ||
+                    p.audio.includes('merriam-webster.com')
+                ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+
+                if (bestAudio) new Audio(bestAudio).play().catch(() => speakText(word));
+                else speakText(word);
+            }
+        }
+        else if (response && response.error && (response.error.includes('Update') || response.error.includes('invalidated'))) {
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
@@ -337,18 +366,18 @@
                     container.innerHTML = '';
                     const res = document.createElement('div');
                     res.className = 'translator-translation';
-                    res.textContent = trRes.data.translated || '翻译结果为空';
+                    res.textContent = trRes.data.translated || 'No translation results';
                     container.appendChild(res);
                 }
                 // Auto speak for translation as well
                 speakText(word);
             } else {
-                updatePopupWithError(word, (trRes && trRes.error) || (response && response.error) || '查询失败');
+                updatePopupWithError(word, (trRes && trRes.error) || (response && response.error) || 'Query failed');
             }
         }
     });
 
-    // ==================== 悬浮按钮 (Refactored) ====================
+    // ==================== Floating Buttons (Refactored) ====================
 
     function removeFloatButtons() {
         if (hideFloatButtonsTimeout) {
@@ -379,19 +408,19 @@
             const speakBtn = document.createElement('button');
             speakBtn.className = 'translator-float-btn speak-btn';
             speakBtn.innerHTML = createSpeakerSVG();
-            speakBtn.setAttribute('data-tooltip', '朗读');
+            speakBtn.setAttribute('data-tooltip', 'Speak');
             speakBtn.onmouseenter = () => speakText(text);
 
             const transBtn = document.createElement('button');
             transBtn.className = 'translator-float-btn translate-btn';
-            transBtn.textContent = '译';
-            transBtn.setAttribute('data-tooltip', '翻译');
+            transBtn.textContent = 'T';
+            transBtn.setAttribute('data-tooltip', 'Translate');
             transBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
 
             const closeBtn = document.createElement('button');
             closeBtn.className = 'translator-float-btn close-floating-btn';
             closeBtn.textContent = '×';
-            closeBtn.setAttribute('data-tooltip', '关闭');
+            closeBtn.setAttribute('data-tooltip', 'Close');
             closeBtn.onclick = removeFloatButtons;
             closeBtn.onmouseenter = removeFloatButtons;
 
@@ -434,7 +463,7 @@
         content.className = 'translator-sentence-content';
         const loading = document.createElement('div');
         loading.className = 'translator-loading';
-        loading.textContent = '正在翻译...';
+        loading.textContent = 'Translating...';
         content.appendChild(loading);
 
         currentPopup.appendChild(closeBtn);
@@ -451,17 +480,17 @@
             content.innerHTML = '';
             const res = document.createElement('div');
             res.className = 'translator-result';
-            res.textContent = response.data.translated || '翻译结果为空';
+            res.textContent = response.data.translated || 'No translation results';
             content.appendChild(res);
         } else {
-            content.textContent = `❌ ${(response && response.error) || '翻译失败'}`;
+            content.textContent = `❌ ${(response && response.error) || 'Translation failed'}`;
         }
     }
 
     // Dismissal
     document.addEventListener('mousedown', (e) => {
         if (!isContextValid()) return;
-        // 使用 composedPath() 穿透 Shadow DOM 边界进行检测
+        // Use composedPath() to detect clicks across Shadow DOM boundaries
         const path = e.composedPath();
         const isClickInside = path.some(el =>
             el === shadowHost ||
@@ -477,11 +506,11 @@
         }
     });
 
-    // 辅助设置漂浮按钮容器
+    // Helper to setup floating buttons container
     function setupFloatButtons(root, buttons) {
         buttons.style.pointerEvents = 'auto';
         root.appendChild(buttons);
     }
 
-    console.log('快译扩展已加载 (Shadow DOM 版)');
+    console.log('Translater Extension Loaded (Shadow DOM)');
 })();
