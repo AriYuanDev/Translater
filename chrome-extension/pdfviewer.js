@@ -365,8 +365,12 @@ viewer.addEventListener('dblclick', async (e) => {
 
             if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
         }
-    } else if (response && response.error && (response.error.includes('Update') || response.error.includes('invalidated'))) {
-        meanings.innerHTML = ''; const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${response.error}`; meanings.appendChild(err);
+    } else if (response && response.error) {
+        meanings.innerHTML = '';
+        const err = document.createElement('div');
+        err.className = 'translator-error';
+        err.textContent = `❌ ${response.error}`;
+        meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
         if (!isContextValid() || !currentPopup) return;
@@ -377,7 +381,7 @@ viewer.addEventListener('dblclick', async (e) => {
             // Auto speak for translation
             speakText(word);
         } else {
-            const errText = (tr && tr.error) || (response && response.error) || 'Query failed';
+            const errText = (tr && tr.error) || 'Query failed';
             const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${errText}`;
             meanings.appendChild(err);
         }
@@ -473,7 +477,7 @@ viewer.onmouseup = async (e) => {
 };
 
 async function translateSelection(text, x, y) {
-    removeFloatButtons(); const root = ensureShadowRoot();
+    removeFloatButtons(); const root = await ensureShadowRoot();
     currentPopup = document.createElement('div'); currentPopup.className = 'translator-sentence-popup';
     const content = document.createElement('div'); content.className = 'translator-sentence-content';
     const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = 'Translating...';
@@ -499,20 +503,27 @@ async function translateSelection(text, x, y) {
 }
 
 document.onmousedown = (e) => {
-    if (!isContextValid()) return;
     const path = e.composedPath();
     const isClickInside = path.some(el =>
         el === shadowHost ||
         (el.classList && (el.classList.contains('translator-popup') || el.classList.contains('translator-float-buttons') || el.classList.contains('translator-sentence-popup')))
     );
     if (!isClickInside && currentPopup) removeAllPopups();
+    if (!isContextValid()) return;
 };
 
 function showLoading(show) {
     let overlay = document.querySelector('.loading-overlay');
     if (show && !overlay) {
-        overlay = document.createElement('div'); overlay.className = 'loading-overlay';
-        overlay.innerHTML = '<div class="loading-spinner"></div><div class="loading-text">Loading PDF...</div>';
+        overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+        const text = document.createElement('div');
+        text.className = 'loading-text';
+        text.textContent = 'Loading PDF...';
+        overlay.appendChild(spinner);
+        overlay.appendChild(text);
         document.body.appendChild(overlay);
     } else if (!show && overlay) overlay.remove();
 }

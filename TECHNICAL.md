@@ -16,13 +16,17 @@ Translater is a cross-platform (Chrome & VS Code) productivity suite providing h
 
 ### 2.1 Modern ES Modular Design
 The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse across different environments:
-- **[utils.js](file:///utils.js)**: Contains shared logic including secure message passing, TTS drivers, HTML escaping, and coordinate calculation.
+- **[utils.js](chrome-extension/utils.js)**: Contains shared logic including secure message passing (with 15-second timeout protection), TTS drivers, HTML escaping, and coordinate calculation.
 - **Dynamic Imports**: Used in `content.js` and `pdfviewer.js` via `await import(chrome.runtime.getURL('utils.js'))` for just-in-time loading.
 
 ### 2.2 UI Isolation & Synchronization (Shadow DOM)
 -   **Style Synchronization**: Implements a `Promise`-based style waiting mechanism to prevent Flash of Unstyled Content (FOUC). The UI renders only after the `styles.css` is fully loaded in the `ensureShadowRoot` phase.
 -   **Isolation**: Ensures popup styles remain consistent and unaffected by host page CSS (e.g., GitHub, Gmail).
 -   **Consistency**: The PDF viewer and standard web pages share the same Shadow DOM creation logic for a unified visual experience.
+
+### 2.3 Robustness Enhancements
+-   **Request Timeout**: All background communication (`sendMessageSafe`) is protected by a 15-second timeout to prevent UI hangs when APIs are unresponsive.
+-   **Context-Agnostic Dismissal**: Popups can be dismissed (via clicking outside) even if the extension context has been invalidated (e.g., after an extension update), preventing "orphaned" popups.
 
 ---
 

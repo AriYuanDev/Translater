@@ -355,7 +355,7 @@
                 else speakText(word);
             }
         }
-        else if (response && response.error && (response.error.includes('Update') || response.error.includes('invalidated'))) {
+        else if (response && response.error) {
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
@@ -372,7 +372,7 @@
                 // Auto speak for translation as well
                 speakText(word);
             } else {
-                updatePopupWithError(word, (trRes && trRes.error) || (response && response.error) || 'Query failed');
+                updatePopupWithError(word, (trRes && trRes.error) || 'Query failed');
             }
         }
     });
@@ -489,7 +489,6 @@
 
     // Dismissal
     document.addEventListener('mousedown', (e) => {
-        if (!isContextValid()) return;
         // Use composedPath() to detect clicks across Shadow DOM boundaries
         const path = e.composedPath();
         const isClickInside = path.some(el =>
@@ -504,13 +503,9 @@
         if (!isClickInside && currentPopup) {
             removeAllPopups();
         }
+
+        // Only continue for other logic if context is valid
+        if (!isContextValid()) return;
     });
-
-    // Helper to setup floating buttons container
-    function setupFloatButtons(root, buttons) {
-        buttons.style.pointerEvents = 'auto';
-        root.appendChild(buttons);
-    }
-
     console.log('Translater Extension Loaded (Shadow DOM)');
 })();

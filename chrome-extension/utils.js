@@ -60,28 +60,43 @@ export function calculatePopupPosition(x, y, popupWidth, popupHeight) {
     return { left, top };
 }
 
-// Safely send message to background
-export async function sendMessageSafe(message) {
+// Safely send message to background with timeout
+export async function sendMessageSafe(message, timeoutMs = 15000) {
     if (!isContextValid()) {
         return { success: false, error: 'Extension context invalidated, please refresh the page.' };
     }
 
+    const sendAction = async () => {
+        try {
+            const response = await chrome.runtime.sendMessage(message);
+            // If undefined, background might not be ready, retry once
+            if (response === undefined) {
+                console.log('[Translater] Received undefined response, retrying...');
+                await new Promise(r => setTimeout(r, 200));
+                const retryResponse = await chrome.runtime.sendMessage(message);
+                return retryResponse || { success: false, error: 'No response from background' };
+            }
+            return response;
+        } catch (error) {
+            console.error('[Translater] Failed to send message:', error);
+            if (error.message?.includes('Extension context invalidated')) {
+                return { success: false, error: 'Extension updated, please refresh the page.' };
+            }
+            return { success: false, error: 'Network communication error' };
+        }
+    };
+
+    let timeoutId;
+    const timeoutPromise = new Promise(resolve => {
+        timeoutId = setTimeout(() => {
+            resolve({ success: false, error: 'Request timed out' });
+        }, timeoutMs);
+    });
+
     try {
-        const response = await chrome.runtime.sendMessage(message);
-        // If undefined, background might not be ready, retry once
-        if (response === undefined) {
-            console.log('[Translater] Received undefined response, retrying...');
-            await new Promise(r => setTimeout(r, 200));
-            const retryResponse = await chrome.runtime.sendMessage(message);
-            return retryResponse || { success: false, error: 'No response from background' };
-        }
-        return response;
-    } catch (error) {
-        console.error('[Translater] Failed to send message:', error);
-        if (error.message?.includes('Extension context invalidated')) {
-            return { success: false, error: 'Extension updated, please refresh the page.' };
-        }
-        return { success: false, error: 'Network communication error' };
+        return await Promise.race([sendAction(), timeoutPromise]);
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
