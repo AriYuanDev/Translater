@@ -134,8 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await sendMessageSafe({ action: 'getTranslationEngine' });
 
-            if (response.success) {
-                if (response.engine === 'DeepL') {
+            if (response.success && response.data) {
+                if (response.data.engine === 'DeepL') {
                     currentEngine.innerHTML = `
             <span class="engine-badge deepl">
               ✨ DeepL (High Quality)
@@ -161,8 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await sendMessageSafe({ action: 'getMWApiKey' });
 
-            if (response.success) {
-                if (response.apiKey) {
+            if (response.success && response.data) {
+                if (response.data.apiKey) {
                     showMWStatus('✅ Merriam-Webster API configured. Dictionary is ready.', 'success');
                 } else {
                     showMWStatus('⚠️ Please configure Merriam-Webster API key to enable dictionary features.', 'warning');

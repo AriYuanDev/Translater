@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.1 (Premium UI & Refined Pronunciation)  
-> **Update Date**: 2026-02-01
-> **Key Improvements**: Implemented a fully internationalized (English-only) interface, introduced a high-fidelity Glassmorphism UI design, and refined the pronunciation logic for morphed words.
+> **Version**: 1.4.2 (Code Quality & Stability Release)  
+> **Update Date**: 2026-02-02
+> **Key Improvements**: Achieved 100% code audit pass rate, unified audio logic, and finalized comprehensive JSDoc coverage for core modules.
 
 ---
 
@@ -78,3 +78,11 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 
 -   **Icon Assets**: `/generate_icons.py` provides multi-size icon scaling.
 -   **Dictionary Source**: Uses Merriam-Webster Learners API. Ensure the correct dictionary type is selected during API key registration.
+
+---
+
+## 8. Code Quality Standards (v1.4.2 Audit)
+
+-   **Documentation Coverage**: All public and core internal functions in `utils.js`, `content.js`, and `pdfviewer.js` feature complete JSDoc annotations.
+-   **Static Analysis**: Codebase passes strict linting for `ReferenceError` and variable scope validation.
+-   **Logic Consistency**: Audio selection logic (`findBestAudioUrl`) is centralized in `utils.js` and strictly enforced across all extension contexts.

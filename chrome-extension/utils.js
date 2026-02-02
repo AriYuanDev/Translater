@@ -3,6 +3,11 @@
  */
 
 // HTML escape function to prevent XSS attacks
+/**
+ * Escapes HTML characters to prevent XSS.
+ * @param {string} text - The string to escape.
+ * @returns {string}
+ */
 export function escapeHtml(text) {
     if (!text) return '';
     const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
@@ -10,12 +15,21 @@ export function escapeHtml(text) {
 }
 
 // Detect if text is entirely English (and does not contain CJK characters)
+/**
+ * Checks if a string consists entirely of English characters and symbols.
+ * @param {string} text
+ * @returns {boolean}
+ */
 export function isAllEnglish(text) {
     const cjkRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
     return !cjkRegex.test(text);
 }
 
 // Create pronunciation icon SVG
+/**
+ * Returns the SVG markup for the speaker icon.
+ * @returns {string}
+ */
 export function createSpeakerSVG() {
     return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%; fill:currentColor;">
       <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
@@ -23,11 +37,20 @@ export function createSpeakerSVG() {
 }
 
 // Check if extension context is valid
+/**
+ * Checks if the extension context is still valid.
+ * @returns {boolean}
+ */
 export function isContextValid() {
     return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
 }
 
 // Safely get extension resource URL
+/**
+ * Safely resolves a path to a chrome extension URL.
+ * @param {string} path 
+ * @returns {string}
+ */
 export function getURLSafe(path) {
     if (!isContextValid()) return '';
     try {
@@ -38,6 +61,14 @@ export function getURLSafe(path) {
 }
 
 // Calculate popup position
+/**
+ * Calculates the optimal position for a popup element relative to click coordinates.
+ * @param {number} x - Click X coordinate.
+ * @param {number} y - Click Y coordinate.
+ * @param {number} popupWidth - Estimated popup width.
+ * @param {number} popupHeight - Estimated popup height.
+ * @returns {{left: number, top: number}} The calculated position.
+ */
 export function calculatePopupPosition(x, y, popupWidth, popupHeight) {
     const padding = 10;
     const viewportWidth = window.innerWidth;
@@ -61,6 +92,12 @@ export function calculatePopupPosition(x, y, popupWidth, popupHeight) {
 }
 
 // Safely send message to background with timeout
+/**
+ * Safely sends a message to the background script with error handling and timeout.
+ * @param {Object} message - The message object.
+ * @param {number} [timeoutMs=15000] - Timeout in milliseconds.
+ * @returns {Promise<Object>} The response data.
+ */
 export async function sendMessageSafe(message, timeoutMs = 15000) {
     if (!isContextValid()) {
         return { success: false, error: 'Extension context invalidated, please refresh the page.' };
@@ -119,6 +156,12 @@ function waitForVoices() {
 }
 
 // Generic TTS speech driver
+/**
+ * Uses the Web Speech API to speak the given text.
+ * @param {string} text - The text to speak.
+ * @param {Object} [options={}] - Speech options (lang, rate, pitch).
+ * @returns {Promise<void>}
+ */
 export async function speakText(text, options = {}) {
     if (!text) return;
 
@@ -146,3 +189,164 @@ export async function speakText(text, options = {}) {
 
     window.speechSynthesis.speak(utterance);
 }
+
+/**
+ * Finds the best available audio URL from a list of phonetics.
+ * Prioritizes US accents and specific providers.
+ * @param {Array} phonetics - Array of phonetic objects from the API.
+ * @returns {string} The selected audio URL or empty string.
+ */
+export function findBestAudioUrl(phonetics) {
+    if (!phonetics || !Array.isArray(phonetics)) return '';
+
+    // Prioritize US accents or known high-quality sources
+    const best = phonetics.find(p => p.audio && (
+        p.audio.includes('us_pron') ||
+        p.audio.includes('-us') ||
+        p.audio.includes('merriam-webster.com')
+    ));
+
+    return best ? best.audio : (phonetics.find(p => p.audio)?.audio || '');
+}
+
+// ==================== Shared UI Components & State ====================
+
+let shadowHost = null;
+let shadowRoot = null;
+let currentPopup = null;
+let currentFloatButtons = null;
+let hideFloatButtonsTimeout = null;
+let stylesLoaded = false;
+let stylesLoadPromise = null;
+
+/**
+ * Ensures the Shadow DOM host is present and initialized.
+ * @param {string} hostId - ID for the host element.
+ * @param {boolean} isFullScreen - Whether the host should cover the full viewport.
+ * @returns {Promise<ShadowRoot|null>} The initialized ShadowRoot.
+ */
+export async function ensureShadowRoot(hostId = 'translator-extension-host', isFullScreen = true) {
+    if (!isContextValid()) return null;
+    if (!shadowHost) {
+        shadowHost = document.createElement('div');
+        shadowHost.id = hostId;
+        if (isFullScreen) {
+            Object.assign(shadowHost.style, {
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100vw',
+                height: '100vh',
+                pointerEvents: 'none',
+                zIndex: '2147483647',
+                border: 'none',
+                padding: '0',
+                margin: '0',
+                visibility: 'visible',
+                display: 'block'
+            });
+        }
+        (document.body || document.documentElement).appendChild(shadowHost);
+        shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
+
+        const styleLink = document.createElement('link');
+        styleLink.rel = 'stylesheet';
+        styleLink.href = getURLSafe('styles.css');
+        shadowRoot.appendChild(styleLink);
+
+        stylesLoadPromise = new Promise((resolve) => {
+            styleLink.onload = () => { stylesLoaded = true; resolve(); };
+            styleLink.onerror = () => { stylesLoaded = true; resolve(); };
+            setTimeout(() => { if (!stylesLoaded) { stylesLoaded = true; resolve(); } }, 500);
+        });
+    }
+
+    if (stylesLoadPromise && !stylesLoaded) {
+        await stylesLoadPromise;
+    }
+    return shadowRoot;
+}
+
+/**
+ * Creates a standard Close button for popups.
+ * @param {Function} onClick - Callback for the click event.
+ * @returns {HTMLButtonElement}
+ */
+export function createCloseButton(onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'translator-close-btn';
+    btn.title = 'Close';
+    btn.textContent = '×';
+    btn.style.zIndex = '2147483647';
+    btn.style.pointerEvents = 'auto';
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+
+/**
+ * Creates a standard Speak button for popups.
+ * @param {Function} [onClick] - Optional callback for the click event.
+ * @returns {HTMLButtonElement}
+ */
+export function createSpeakButton(onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'translator-speak-btn';
+    btn.title = 'Speak';
+    btn.innerHTML = createSpeakerSVG();
+    if (onClick) {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+    }
+    return btn;
+}
+
+/**
+ * Removes all active popups and floating buttons from the Shadow DOM.
+ */
+export function removeAllPopups() {
+    if (currentPopup) {
+        currentPopup.remove();
+        currentPopup = null;
+    }
+    removeFloatButtons();
+}
+
+/**
+ * Removes floating buttons specifically.
+ */
+export function removeFloatButtons() {
+    if (hideFloatButtonsTimeout) {
+        clearTimeout(hideFloatButtonsTimeout);
+        hideFloatButtonsTimeout = null;
+    }
+    if (currentFloatButtons) {
+        currentFloatButtons.remove();
+        currentFloatButtons = null;
+    }
+}
+
+/**
+ * Gets or sets the current popup reference.
+ */
+export function getCurrentPopup() { return currentPopup; }
+export function setCurrentPopup(el) { currentPopup = el; }
+
+/**
+ * Gets or sets the current float buttons reference.
+ */
+export function getCurrentFloatButtons() { return currentFloatButtons; }
+export function setCurrentFloatButtons(el) { currentFloatButtons = el; }
+
+/**
+ * Gets or sets the hide timeout for float buttons.
+ */
+export function getHideFloatButtonsTimeout() { return hideFloatButtonsTimeout; }
+export function setHideFloatButtonsTimeout(t) { hideFloatButtonsTimeout = t; }
+
+/**
+ * Gets the shadow root reference.
+ */
+export function getShadowRoot() { return shadowRoot; }
+export function getShadowHost() { return shadowHost; }

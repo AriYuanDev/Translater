@@ -9,6 +9,11 @@ try {
     utils = await import(utilsUrl);
 } catch (e) {
     console.log('[Translater] Extension context invalidated, please refresh the page');
+    throw new Error('Failed to initialize extension utilities');
+}
+
+if (!utils) {
+    throw new Error('Extension utilities not available');
 }
 
 const {
@@ -19,8 +24,20 @@ const {
     sendMessageSafe,
     speakText,
     getURLSafe,
-    isContextValid
-} = utils || {};
+    isContextValid,
+    ensureShadowRoot,
+    createCloseButton,
+    createSpeakButton,
+    removeAllPopups,
+    removeFloatButtons,
+    getCurrentPopup,
+    setCurrentPopup,
+    setCurrentFloatButtons,
+    getHideFloatButtonsTimeout,
+    setHideFloatButtonsTimeout,
+    findBestAudioUrl,
+    getShadowHost
+} = utils;
 
 // PDF.js configuration
 const pdfjsLib = await import('./pdf.min.mjs');
@@ -42,71 +59,19 @@ const sidebar = document.getElementById('sidebar');
 const outlineContainer = document.getElementById('outlineContainer');
 const sidebarToggle = document.getElementById('sidebarToggle');
 
-// ==================== Shadow DOM Setup (Synced with content.js) ====================
+// Constants
+const DEFAULT_SCALE = 1.9;
+const ZOOM_STEP = 0.25;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4.0;
+const POPUP_WIDTH = 350;
+const POPUP_HEIGHT = 200;
+const SENTENCE_POPUP_WIDTH = 400;
+const SENTENCE_POPUP_HEIGHT = 150;
+const FLOAT_BTN_WIDTH = 32;
+const FLOAT_BTN_GAP = 30;
 
-let shadowHost = null;
-let shadowRoot = null;
-let currentPopup = null;
-let currentFloatButtons = null;
-let hideFloatButtonsTimeout = null;
-
-let stylesLoaded = false;
-let stylesLoadPromise = null;
-
-async function ensureShadowRoot() {
-    if (!isContextValid()) return null;
-    if (!shadowHost) {
-        shadowHost = document.createElement('div');
-        shadowHost.id = 'translator-extension-host';
-        Object.assign(shadowHost.style, {
-            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
-            pointerEvents: 'none', zIndex: '2147483647', border: 'none', padding: '0', margin: '0'
-        });
-        document.body.appendChild(shadowHost);
-        shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
-
-        const styleLink = document.createElement('link');
-        styleLink.rel = 'stylesheet';
-        styleLink.href = getURLSafe('styles.css');
-        shadowRoot.appendChild(styleLink);
-
-        stylesLoadPromise = new Promise((resolve) => {
-            styleLink.onload = () => { stylesLoaded = true; resolve(); };
-            styleLink.onerror = () => { stylesLoaded = true; resolve(); };
-            setTimeout(() => { if (!stylesLoaded) { stylesLoaded = true; resolve(); } }, 500);
-        });
-    }
-    if (stylesLoadPromise && !stylesLoaded) await stylesLoadPromise;
-    return shadowRoot;
-}
-
-function removeFloatButtons() {
-    if (hideFloatButtonsTimeout) { clearTimeout(hideFloatButtonsTimeout); hideFloatButtonsTimeout = null; }
-    if (currentFloatButtons) { currentFloatButtons.remove(); currentFloatButtons = null; }
-}
-
-function removeAllPopups() {
-    removeFloatButtons();
-    if (currentPopup) { currentPopup.remove(); currentPopup = null; }
-}
-
-function createCloseButton(onClick) {
-    const btn = document.createElement('button');
-    btn.className = 'translator-close-btn';
-    btn.textContent = '×';
-    btn.onclick = onClick;
-    return btn;
-}
-
-function createSpeakButton(onClick) {
-    const btn = document.createElement('button');
-    btn.className = 'translator-speak-btn';
-    btn.innerHTML = createSpeakerSVG();
-    if (onClick) {
-        btn.onclick = (e) => { e.stopPropagation(); onClick(); };
-    }
-    return btn;
-}
+let pageObserver = null;
 
 // ==================== PDF Loading and Rendering ====================
 
@@ -114,6 +79,10 @@ function getPdfUrl() {
     return new URLSearchParams(window.location.search).get('url');
 }
 
+/**
+ * Loads and initializes a PDF document from a URL.
+ * @param {string} url - The URL of the PDF to load.
+ */
 async function loadPdf(url) {
     try {
         showLoading(true);
@@ -140,6 +109,9 @@ async function loadPdf(url) {
     }
 }
 
+/**
+ * Calculates and sets the zoom scale to fit the PDF width to the viewer container.
+ */
 async function calculateFitWidth() {
     const page = await pdfDoc.getPage(1);
     const viewport = page.getViewport({ scale: 1.0 });
@@ -148,11 +120,16 @@ async function calculateFitWidth() {
     updateZoomLevel();
 }
 
+/**
+ * Renders placeholders for all pages and sets up an IntersectionObserver for lazy rendering.
+ */
 async function renderAllPages() {
     viewer.innerHTML = '';
     renderedPages.clear();
 
-    const observer = new IntersectionObserver((entries) => {
+    if (pageObserver) pageObserver.disconnect();
+
+    pageObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 const pageContainer = entry.target;
@@ -180,10 +157,15 @@ async function renderAllPages() {
         container.appendChild(loading);
         viewer.appendChild(container);
         renderedPages.set(pageNum, container);
-        observer.observe(container);
+        pageObserver.observe(container);
     }
 }
 
+/**
+ * Renders the content of a specific PDF page into its container.
+ * @param {number} pageNum - The page number to render.
+ * @param {HTMLElement} container - The container for the page.
+ */
 async function renderPageContent(pageNum, container) {
     try {
         const page = await pdfDoc.getPage(pageNum);
@@ -309,6 +291,10 @@ async function renderOutline() {
 
 // ==================== Translation Logic (Shadow DOM) ====================
 
+/**
+ * Handles the double-click event to show the dictionary popup for a word.
+ * @param {MouseEvent} e
+ */
 viewer.addEventListener('dblclick', async (e) => {
     if (!isContextValid()) return;
     const word = window.getSelection().toString().trim();
@@ -316,9 +302,9 @@ viewer.addEventListener('dblclick', async (e) => {
 
     const root = await ensureShadowRoot();
     removeAllPopups();
-    currentPopup = document.createElement('div');
-    currentPopup.className = 'translator-popup';
-    currentPopup.style.pointerEvents = 'auto';
+    const popup = document.createElement('div');
+    popup.className = 'translator-popup';
+    popup.style.pointerEvents = 'auto';
 
     const content = document.createElement('div');
     content.className = 'translator-popup-content';
@@ -330,7 +316,6 @@ viewer.addEventListener('dblclick', async (e) => {
     wInfo.appendChild(wSpan);
     header.appendChild(wInfo);
     header.appendChild(createSpeakButton(() => {
-        // The PDF viewer is usually loading here, maintain default behavior
         speakText(word);
     }));
     const meanings = document.createElement('div'); meanings.className = 'translator-meanings';
@@ -338,16 +323,17 @@ viewer.addEventListener('dblclick', async (e) => {
     meanings.appendChild(loading);
     content.appendChild(header); content.appendChild(meanings);
 
-    currentPopup.appendChild(createCloseButton(removeAllPopups));
-    currentPopup.appendChild(content);
-    root.appendChild(currentPopup);
+    popup.appendChild(content);
+    popup.appendChild(createCloseButton(removeAllPopups));
+    root.appendChild(popup);
+    setCurrentPopup(popup);
 
-    const pos = calculatePopupPosition(e.clientX, e.clientY, 350, 200);
-    currentPopup.style.left = pos.left + 'px';
-    currentPopup.style.top = pos.top + 'px';
+    const pos = calculatePopupPosition(e.clientX, e.clientY, POPUP_WIDTH, POPUP_HEIGHT);
+    popup.style.left = pos.left + 'px';
+    popup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'fetchDictionary', word: word.toLowerCase() });
-    if (!isContextValid() || !currentPopup) return;
+    if (!isContextValid() || !getCurrentPopup()) return;
     if (response && response.success && response.data) {
         updatePopupWithData(response.data, word);
         const isMorphed = response.data.word && response.data.word.toLowerCase() !== word.toLowerCase();
@@ -357,11 +343,7 @@ viewer.addEventListener('dblclick', async (e) => {
             speakText(word);
         } else {
             // Standard word: Prioritize dictionary audio
-            const best = response.data.phonetics?.find(p => p.audio && (
-                p.audio.includes('us_pron') ||
-                p.audio.includes('-us') ||
-                p.audio.includes('merriam-webster.com')
-            ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+            const best = findBestAudioUrl(response.data.phonetics);
 
             if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
         }
@@ -373,7 +355,7 @@ viewer.addEventListener('dblclick', async (e) => {
         meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
-        if (!isContextValid() || !currentPopup) return;
+        if (!isContextValid() || !getCurrentPopup()) return;
         meanings.innerHTML = '';
         if (tr && tr.success && tr.data) {
             const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || 'No results';
@@ -388,12 +370,17 @@ viewer.addEventListener('dblclick', async (e) => {
     }
 });
 
+/**
+ * Updates the popup content with dictionary data.
+ * @param {Object} data - The dictionary API response.
+ * @param {string} word - The original searched word.
+ */
 function updatePopupWithData(data, word) {
-    if (!currentPopup || !data) {
+    if (!getCurrentPopup() || !data) {
         console.error('[Translater] updatePopupWithData received invalid data:', data);
         return;
     }
-    const content = currentPopup.querySelector('.translator-popup-content');
+    const content = getCurrentPopup().querySelector('.translator-popup-content');
     content.innerHTML = '';
     const header = document.createElement('div'); header.className = 'translator-word-header';
     const info = document.createElement('div');
@@ -419,11 +406,7 @@ function updatePopupWithData(data, word) {
     }
     if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
     header.appendChild(info);
-    const best = data.phonetics?.find(p => p.audio && (
-        p.audio.includes('us_pron') ||
-        p.audio.includes('-us') ||
-        p.audio.includes('merriam-webster.com')
-    ))?.audio || data.phonetics?.find(p => p.audio)?.audio;
+    const best = findBestAudioUrl(data.phonetics);
 
     const speakHandler = () => {
         if (best) {
@@ -454,40 +437,60 @@ function updatePopupWithData(data, word) {
 viewer.onmouseup = async (e) => {
     if (!isContextValid()) return;
     setTimeout(async () => {
-        const text = window.getSelection().toString().trim();
-        if (e.target.id === 'translator-extension-host') return;
-        removeFloatButtons();
-        if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
-        const root = await ensureShadowRoot();
-        currentFloatButtons = document.createElement('div');
-        currentFloatButtons.className = 'translator-float-buttons';
-        const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onmouseenter = () => speakText(text);
-        const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
-        const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
-        currentFloatButtons.append(sBtn, tBtn, cBtn);
-        currentFloatButtons.style.pointerEvents = 'auto';
-        root.appendChild(currentFloatButtons);
-        const btnW = 32, gap = 30, contW = btnW * 3 + gap + 6;
-        let left = Math.max(10, Math.min(e.clientX - btnW - gap / 2, window.innerWidth - contW - 10));
-        let top = Math.max(60, Math.min(e.clientY - btnW / 2, window.innerHeight - btnW - 10));
-        currentFloatButtons.style.left = left + 'px'; currentFloatButtons.style.top = top + 'px'; currentFloatButtons.style.gap = gap + 'px';
-        currentFloatButtons.onmouseleave = () => { hideFloatButtonsTimeout = setTimeout(removeFloatButtons, 500); };
-        currentFloatButtons.onmouseenter = () => { if (hideFloatButtonsTimeout) clearTimeout(hideFloatButtonsTimeout); };
+        try {
+            const text = window.getSelection().toString().trim();
+            if (e.target.id === 'translator-extension-host') return;
+            removeFloatButtons();
+            if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
+            const root = await ensureShadowRoot();
+            const floatButtons = document.createElement('div');
+            floatButtons.className = 'translator-float-buttons';
+            const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onmouseenter = () => speakText(text);
+            const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
+            const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
+            floatButtons.append(sBtn, tBtn, cBtn);
+            floatButtons.style.pointerEvents = 'auto';
+            root.appendChild(floatButtons);
+            setCurrentFloatButtons(floatButtons);
+
+            const contW = FLOAT_BTN_WIDTH * 3 + FLOAT_BTN_GAP + 6;
+            let left = Math.max(10, Math.min(e.clientX - FLOAT_BTN_WIDTH - FLOAT_BTN_GAP / 2, window.innerWidth - contW - 10));
+            let top = Math.max(60, Math.min(e.clientY - FLOAT_BTN_WIDTH / 2, window.innerHeight - FLOAT_BTN_WIDTH - 10));
+            floatButtons.style.left = left + 'px'; floatButtons.style.top = top + 'px'; floatButtons.style.gap = FLOAT_BTN_GAP + 'px';
+            floatButtons.onmouseleave = () => { setHideFloatButtonsTimeout(setTimeout(removeFloatButtons, 500)); };
+            floatButtons.onmouseenter = () => { if (getHideFloatButtonsTimeout()) clearTimeout(getHideFloatButtonsTimeout()); };
+        } catch (err) {
+            console.error('[Translater] Mouseup error:', err);
+        }
     }, 50);
 };
 
+/**
+ * Translates the selection and displays a popup.
+ * @param {string} text - Text to translate.
+ * @param {number} x - X coordinate.
+ * @param {number} y - Y coordinate.
+ */
 async function translateSelection(text, x, y) {
-    removeFloatButtons(); const root = await ensureShadowRoot();
-    currentPopup = document.createElement('div'); currentPopup.className = 'translator-sentence-popup';
-    const content = document.createElement('div'); content.className = 'translator-sentence-content';
-    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = 'Translating...';
+    removeFloatButtons();
+    const root = await ensureShadowRoot();
+    const popup = document.createElement('div');
+    popup.className = 'translator-sentence-popup';
+    const content = document.createElement('div');
+    content.className = 'translator-sentence-content';
+    const loading = document.createElement('div');
+    loading.className = 'translator-loading';
+    loading.textContent = 'Translating...';
     content.appendChild(loading);
-    currentPopup.appendChild(createCloseButton(removeAllPopups));
-    currentPopup.appendChild(content);
-    currentPopup.style.pointerEvents = 'auto';
-    root.appendChild(currentPopup);
-    const pos = calculatePopupPosition(x, y, 400, 150);
-    currentPopup.style.left = pos.left + 'px'; currentPopup.style.top = pos.top + 'px';
+    popup.appendChild(content);
+    popup.appendChild(createCloseButton(removeAllPopups));
+    popup.style.pointerEvents = 'auto';
+    root.appendChild(popup);
+    setCurrentPopup(popup);
+
+    const pos = calculatePopupPosition(x, y, SENTENCE_POPUP_WIDTH, SENTENCE_POPUP_HEIGHT);
+    popup.style.left = pos.left + 'px';
+    popup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'translate', text });
     if (!isContextValid()) return;
@@ -505,10 +508,10 @@ async function translateSelection(text, x, y) {
 document.onmousedown = (e) => {
     const path = e.composedPath();
     const isClickInside = path.some(el =>
-        el === shadowHost ||
+        el === getShadowHost() ||
         (el.classList && (el.classList.contains('translator-popup') || el.classList.contains('translator-float-buttons') || el.classList.contains('translator-sentence-popup')))
     );
-    if (!isClickInside && currentPopup) removeAllPopups();
+    if (!isClickInside && getCurrentPopup()) removeAllPopups();
     if (!isContextValid()) return;
 };
 

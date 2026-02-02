@@ -19,6 +19,11 @@ chrome.storage.local.get(['dictionaryCache'], (result) => {
   }
 });
 
+/**
+ * Retrieves a dictionary entry from the local LRU cache if it hasn't expired.
+ * @param {string} word - The word to look up in cache.
+ * @returns {Object|null} The cached data or null if not found or expired.
+ */
 function getCachedDictionary(word) {
   const cached = dictionaryCache.get(word);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -34,6 +39,11 @@ function getCachedDictionary(word) {
   return null;
 }
 
+/**
+ * Stores a dictionary entry in the local LRU cache and persists it.
+ * @param {string} word - The word to cache.
+ * @param {Object} data - The definition data to store.
+ */
 function setCachedDictionary(word, data) {
   if (dictionaryCache.size >= CACHE_MAX_SIZE) {
     const firstKey = dictionaryCache.keys().next().value;
@@ -43,8 +53,19 @@ function setCachedDictionary(word, data) {
   saveDictionaryCache();
 }
 
+let savePending = false;
+
+/**
+ * Persists the dictionary cache to storage with a 1-second debounce to avoid excessive I/O.
+ */
 function saveDictionaryCache() {
-  chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
+  if (savePending) return;
+  savePending = true;
+
+  setTimeout(() => {
+    savePending = false;
+    chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
+  }, 1000);
 }
 // Tracking active requests (prevent concurrent duplicate requests)
 const pendingDictionaryRequests = new Map();
@@ -189,6 +210,12 @@ function parseMWDefinitionText(text) {
 }
 
 // Parse Merriam-Webster Learners Dictionary API response
+/**
+ * Parses the raw API response from Merriam-Webster.
+ * @param {Array|Object} data - The raw API response.
+ * @param {string} word - The original word searched.
+ * @returns {Object|null} Formatted dictionary data or null if not found.
+ */
 function parseMWLearnersResponse(data, word) {
   if (!data || !Array.isArray(data) || data.length === 0) {
     return null;
@@ -388,8 +415,14 @@ async function getDeepLApiKey() {
 }
 
 // Save DeepL API key
+/**
+ * Saves the DeepL API key to persistent storage and updates local cache.
+ * @param {string} apiKey 
+ * @returns {Promise<boolean>}
+ */
 async function setDeepLApiKey(apiKey) {
   await chrome.storage.sync.set({ deepLApiKey: apiKey });
+  cachedDeepLApiKey = apiKey;
   return true;
 }
 
@@ -418,6 +451,13 @@ function convertToDeepLLang(lang) {
 }
 
 // Translate text using DeepL
+/**
+ * Core translation logic using DeepL API.
+ * @param {string} text - Text to translate.
+ * @param {string} targetLang - Target language code.
+ * @param {string} apiKey - DeepL API key.
+ * @returns {Promise<Object>} Translation result.
+ */
 async function translateWithDeepL(text, targetLang, apiKey) {
   const deepLLang = convertToDeepLLang(targetLang);
 
@@ -473,6 +513,12 @@ async function translateWithDeepL(text, targetLang, apiKey) {
 }
 
 // Translate text (DeepL only)
+/**
+ * Fetches translation for the given text with concurrency protection and caching.
+ * @param {string} text - Text to translate.
+ * @param {string} targetLang - Target language code.
+ * @returns {Promise<Object>}
+ */
 async function translateText(text, targetLang) {
   if (!text || !text.trim()) return null;
   const apiKey = await getDeepLApiKey();

@@ -27,7 +27,21 @@
         sendMessageSafe,
         speakText,
         isContextValid,
-        getURLSafe
+        getURLSafe,
+        ensureShadowRoot,
+        createCloseButton,
+        createSpeakButton,
+        removeAllPopups,
+        removeFloatButtons,
+        getCurrentPopup,
+        setCurrentPopup,
+        getShadowRoot,
+        getHideFloatButtonsTimeout,
+        setHideFloatButtonsTimeout,
+        setCurrentFloatButtons,
+        getCurrentFloatButtons,
+        getShadowHost,
+        findBestAudioUrl
     } = utils;
 
     // Preload speech engine
@@ -40,127 +54,42 @@
 
     // ==================== Shadow DOM Setup ====================
 
-    let shadowHost = null;
-    let shadowRoot = null;
-    let currentPopup = null;
-    let currentFloatButtons = null;
-    let hideFloatButtonsTimeout = null;
-    let stylesLoaded = false;
-    let stylesLoadPromise = null;
-
-    async function ensureShadowRoot() {
-        if (!isContextValid()) return null;
-        if (!shadowHost) {
-            shadowHost = document.createElement('div');
-            shadowHost.id = 'translator-extension-host';
-            // Set Host to fixed full screen but non-interactive, only its children are interactive
-            Object.assign(shadowHost.style, {
-                position: 'fixed',
-                top: '0',
-                left: '0',
-                width: '100vw',
-                height: '100vh',
-                pointerEvents: 'none',
-                zIndex: '2147483647',
-                border: 'none',
-                padding: '0',
-                margin: '0',
-                visibility: 'visible',
-                display: 'block'
-            });
-            document.documentElement.appendChild(shadowHost);
-            shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
-
-            const styleLink = document.createElement('link');
-            styleLink.rel = 'stylesheet';
-            styleLink.href = getURLSafe('styles.css');
-            shadowRoot.appendChild(styleLink);
-
-            // Wait for styles to load to prevent FOUC (Flash of Unstyled Content)
-            stylesLoadPromise = new Promise((resolve) => {
-                styleLink.onload = () => {
-                    stylesLoaded = true;
-                    resolve();
-                };
-                styleLink.onerror = () => {
-                    // Even on error, mark as loaded to prevent blocking
-                    stylesLoaded = true;
-                    resolve();
-                };
-                // Fallback timeout in case onload doesn't fire
-                setTimeout(() => {
-                    if (!stylesLoaded) {
-                        stylesLoaded = true;
-                        resolve();
-                    }
-                }, 500);
-            });
-        }
-
-        // Wait for styles to be loaded before returning
-        if (stylesLoadPromise && !stylesLoaded) {
-            await stylesLoadPromise;
-        }
-        return shadowRoot;
-    }
-
-    // ==================== UI Construction Tools (Safe DOM API) ====================
-
-    function createCloseButton(onClick) {
-        const btn = document.createElement('button');
-        btn.className = 'translator-close-btn';
-        btn.title = 'Close';
-        btn.textContent = '×';
-        btn.addEventListener('click', onClick);
-        return btn;
-    }
-
-    function createSpeakButton(onClick) {
-        const btn = document.createElement('button');
-        btn.className = 'translator-speak-btn';
-        btn.title = 'Speak';
-        btn.innerHTML = createSpeakerSVG();
-        if (onClick) {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                onClick();
-            });
-        }
-        return btn;
-    }
-
-    function removeAllPopups() {
-        if (currentPopup) {
-            currentPopup.remove();
-            currentPopup = null;
-        }
-        if (currentFloatButtons) {
-            currentFloatButtons.remove();
-            currentFloatButtons = null;
-        }
-    }
+    // State management is now partially delegated to utils.js (singletons in this context)
 
     // ==================== Translation Popup Rendering ====================
 
+    /**
+     * Renders the translation popup at the specified coordinates.
+     * @param {number} x - Viewport X coordinate.
+     * @param {number} y - Viewport Y coordinate.
+     * @param {DocumentFragment|HTMLElement} initialContent - Content to display initially.
+     * @returns {Promise<HTMLElement>} The popup element.
+     */
     async function showPopup(x, y, initialContent) {
         const root = await ensureShadowRoot();
         removeAllPopups();
 
-        currentPopup = document.createElement('div');
-        currentPopup.className = 'translator-popup';
-        currentPopup.style.pointerEvents = 'auto'; // Ensure content is clickable
-        currentPopup.appendChild(initialContent);
+        const popup = document.createElement('div');
+        popup.className = 'translator-popup';
+        popup.style.pointerEvents = 'auto'; // Ensure content is clickable
+        popup.appendChild(initialContent);
 
-        root.appendChild(currentPopup);
+        root.appendChild(popup);
+        setCurrentPopup(popup);
 
-        // Initial positioning using fixed width estimate, as getBoundingClientRect might not be rendered yet
+        // Initial positioning using fixed width estimate
         const pos = calculatePopupPosition(x, y, 350, 200);
-        currentPopup.style.left = pos.left + 'px';
-        currentPopup.style.top = pos.top + 'px';
+        popup.style.left = pos.left + 'px';
+        popup.style.top = pos.top + 'px';
 
-        return currentPopup;
+        return popup;
     }
 
+    /**
+     * Creates a loading placeholder for the dictionary popup.
+     * @param {string} word - The word being searched.
+     * @returns {DocumentFragment}
+     */
     function createLoadingPopup(word) {
         const container = document.createElement('div');
         container.className = 'translator-popup-content';
@@ -189,19 +118,25 @@
         container.appendChild(meanings);
 
         const fragment = document.createDocumentFragment();
-        fragment.appendChild(createCloseButton(removeAllPopups));
+        // DOM Order: content first, close button last (ensures z-index stacking)
         fragment.appendChild(container);
+        fragment.appendChild(createCloseButton(removeAllPopups));
 
         return fragment;
     }
 
+    /**
+     * Updates the popup content with dictionary data.
+     * @param {Object} data - The dictionary API response.
+     * @param {string} word - The original searched word.
+     */
     function updatePopupWithData(data, word) {
-        if (!currentPopup || !data) {
+        if (!getCurrentPopup() || !data) {
             console.error('[Translater] updatePopupWithData received invalid data:', data);
             return;
         }
 
-        const container = currentPopup.querySelector('.translator-popup-content');
+        const container = getCurrentPopup().querySelector('.translator-popup-content');
         if (!container) return;
 
         container.innerHTML = ''; // Clear loading state
@@ -247,11 +182,7 @@
         header.appendChild(wordInfo);
 
         // Find best audio
-        let audioUrl = '';
-        if (data.phonetics) {
-            const best = data.phonetics.find(p => p.audio && (p.audio.includes('us_pron') || p.audio.includes('-us')));
-            audioUrl = best ? best.audio : (data.phonetics[0]?.audio || '');
-        }
+        const audioUrl = findBestAudioUrl(data.phonetics);
 
         const speakHandler = () => {
             if (audioUrl) {
@@ -305,9 +236,14 @@
         // Realignment if width changes significantly (optional), currently maintaining position is smoother
     }
 
+    /**
+     * Updates the existing popup with an error message.
+     * @param {string} word - The word that failed.
+     * @param {string} message - Error message to display.
+     */
     function updatePopupWithError(word, message) {
-        if (!currentPopup) return;
-        const meanings = currentPopup.querySelector('.translator-meanings');
+        if (!getCurrentPopup()) return;
+        const meanings = getCurrentPopup().querySelector('.translator-meanings');
         if (meanings) {
             meanings.innerHTML = '';
             const err = document.createElement('div');
@@ -333,7 +269,7 @@
             word: word.toLowerCase()
         });
 
-        if (!isContextValid() || !currentPopup) return;
+        if (!isContextValid() || !getCurrentPopup()) return;
 
         if (response && response.success && response.data) {
             updatePopupWithData(response.data, word);
@@ -345,11 +281,7 @@
                 speakText(word);
             } else {
                 // Standard word: prioritize dictionary audio
-                const bestAudio = response.data.phonetics?.find(p => p.audio && (
-                    p.audio.includes('us_pron') ||
-                    p.audio.includes('-us') ||
-                    p.audio.includes('merriam-webster.com')
-                ))?.audio || response.data.phonetics?.find(p => p.audio)?.audio;
+                const bestAudio = findBestAudioUrl(response.data.phonetics);
 
                 if (bestAudio) new Audio(bestAudio).play().catch(() => speakText(word));
                 else speakText(word);
@@ -359,9 +291,9 @@
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
-            if (!isContextValid() || !currentPopup) return;
+            if (!isContextValid() || !getCurrentPopup()) return;
             if (trRes && trRes.success && trRes.data) {
-                const container = currentPopup.querySelector('.translator-meanings');
+                const container = getCurrentPopup().querySelector('.translator-meanings');
                 if (container) {
                     container.innerHTML = '';
                     const res = document.createElement('div');
@@ -377,86 +309,88 @@
         }
     });
 
-    // ==================== Floating Buttons (Refactored) ====================
-
-    function removeFloatButtons() {
-        if (hideFloatButtonsTimeout) {
-            clearTimeout(hideFloatButtonsTimeout);
-            hideFloatButtonsTimeout = null;
-        }
-        if (currentFloatButtons) {
-            currentFloatButtons.remove();
-            currentFloatButtons = null;
-        }
-    }
+    // ==================== Floating Buttons (Shared via utils.js) ====================
 
     document.addEventListener('mouseup', (e) => {
         if (!isContextValid()) return;
         setTimeout(async () => {
-            const selection = window.getSelection();
-            const text = selection.toString().trim();
+            try {
+                const selection = window.getSelection();
+                const text = selection.toString().trim();
 
-            if (e.target.id === 'translator-extension-host') return;
-            removeFloatButtons();
+                if (e.target.id === 'translator-extension-host') return;
+                removeFloatButtons();
 
-            if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
+                if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
 
-            const root = await ensureShadowRoot();
-            currentFloatButtons = document.createElement('div');
-            currentFloatButtons.className = 'translator-float-buttons';
+                const root = await ensureShadowRoot();
+                const floatButtons = document.createElement('div');
+                floatButtons.className = 'translator-float-buttons';
 
-            const speakBtn = document.createElement('button');
-            speakBtn.className = 'translator-float-btn speak-btn';
-            speakBtn.innerHTML = createSpeakerSVG();
-            speakBtn.setAttribute('data-tooltip', 'Speak');
-            speakBtn.onmouseenter = () => speakText(text);
+                // Constants for floating buttons
+                const FLOAT_BTN_WIDTH = 32;
+                const FLOAT_BTN_GAP = 30;
 
-            const transBtn = document.createElement('button');
-            transBtn.className = 'translator-float-btn translate-btn';
-            transBtn.textContent = 'T';
-            transBtn.setAttribute('data-tooltip', 'Translate');
-            transBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
+                const speakBtn = document.createElement('button');
+                speakBtn.className = 'translator-float-btn speak-btn';
+                speakBtn.innerHTML = createSpeakerSVG();
+                speakBtn.setAttribute('data-tooltip', 'Speak');
+                speakBtn.onmouseenter = () => speakText(text);
 
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'translator-float-btn close-floating-btn';
-            closeBtn.textContent = '×';
-            closeBtn.setAttribute('data-tooltip', 'Close');
-            closeBtn.onclick = removeFloatButtons;
-            closeBtn.onmouseenter = removeFloatButtons;
+                const transBtn = document.createElement('button');
+                transBtn.className = 'translator-float-btn translate-btn';
+                transBtn.textContent = 'T';
+                transBtn.setAttribute('data-tooltip', 'Translate');
+                transBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
 
-            currentFloatButtons.appendChild(speakBtn);
-            currentFloatButtons.appendChild(transBtn);
-            currentFloatButtons.appendChild(closeBtn);
-            currentFloatButtons.style.pointerEvents = 'auto';
-            root.appendChild(currentFloatButtons);
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'translator-float-btn close-floating-btn';
+                closeBtn.textContent = '×';
+                closeBtn.setAttribute('data-tooltip', 'Close');
+                closeBtn.onclick = removeFloatButtons;
+                closeBtn.onmouseenter = removeFloatButtons;
 
-            // Position
-            const btnWidth = 32;
-            const gap = 30;
-            const containerWidth = btnWidth * 3 + gap + 6;
-            let left = Math.max(10, Math.min(e.clientX - btnWidth - gap / 2, window.innerWidth - containerWidth - 10));
-            let top = Math.max(10, Math.min(e.clientY - btnWidth / 2, window.innerHeight - btnWidth - 10));
+                floatButtons.appendChild(speakBtn);
+                floatButtons.appendChild(transBtn);
+                floatButtons.appendChild(closeBtn);
+                floatButtons.style.pointerEvents = 'auto';
+                root.appendChild(floatButtons);
+                setCurrentFloatButtons(floatButtons);
 
-            currentFloatButtons.style.left = left + 'px';
-            currentFloatButtons.style.top = top + 'px';
-            currentFloatButtons.style.gap = gap + 'px';
+                // Position
+                const containerWidth = FLOAT_BTN_WIDTH * 3 + FLOAT_BTN_GAP + 6;
+                let left = Math.max(10, Math.min(e.clientX - FLOAT_BTN_WIDTH - FLOAT_BTN_GAP / 2, window.innerWidth - containerWidth - 10));
+                let top = Math.max(10, Math.min(e.clientY - FLOAT_BTN_WIDTH / 2, window.innerHeight - FLOAT_BTN_WIDTH - 10));
 
-            currentFloatButtons.addEventListener('mouseleave', () => {
-                hideFloatButtonsTimeout = setTimeout(removeFloatButtons, 500);
-            });
-            currentFloatButtons.addEventListener('mouseenter', () => {
-                if (hideFloatButtonsTimeout) clearTimeout(hideFloatButtonsTimeout);
-            });
+                floatButtons.style.left = left + 'px';
+                floatButtons.style.top = top + 'px';
+                floatButtons.style.gap = FLOAT_BTN_GAP + 'px';
+
+                floatButtons.addEventListener('mouseleave', () => {
+                    setHideFloatButtonsTimeout(setTimeout(removeFloatButtons, 500));
+                });
+                floatButtons.addEventListener('mouseenter', () => {
+                    if (getHideFloatButtonsTimeout()) clearTimeout(getHideFloatButtonsTimeout());
+                });
+            } catch (err) {
+                console.error('[Translater] Mouseup event failed:', err);
+            }
         }, 20);
     });
 
+    /**
+     * Translates the selected text and displays it in a sentence popup.
+     * @param {string} text - Text to translate.
+     * @param {number} x - Viewport X coordinate.
+     * @param {number} y - Viewport Y coordinate.
+     */
     async function translateSelection(text, x, y) {
         removeFloatButtons();
         const root = await ensureShadowRoot();
 
-        currentPopup = document.createElement('div');
-        currentPopup.className = 'translator-sentence-popup';
-        currentPopup.style.pointerEvents = 'auto';
+        const popup = document.createElement('div');
+        popup.className = 'translator-sentence-popup';
+        popup.style.pointerEvents = 'auto';
 
         const closeBtn = createCloseButton(removeAllPopups);
         const content = document.createElement('div');
@@ -466,13 +400,14 @@
         loading.textContent = 'Translating...';
         content.appendChild(loading);
 
-        currentPopup.appendChild(closeBtn);
-        currentPopup.appendChild(content);
-        root.appendChild(currentPopup);
+        popup.appendChild(content);
+        popup.appendChild(closeBtn); // Append button last
+        root.appendChild(popup);
+        setCurrentPopup(popup);
 
         const pos = calculatePopupPosition(x, y, 350, 150);
-        currentPopup.style.left = pos.left + 'px';
-        currentPopup.style.top = pos.top + 'px';
+        popup.style.left = pos.left + 'px';
+        popup.style.top = pos.top + 'px';
 
         const response = await sendMessageSafe({ action: 'translate', text });
         if (!isContextValid()) return;
@@ -492,7 +427,7 @@
         // Use composedPath() to detect clicks across Shadow DOM boundaries
         const path = e.composedPath();
         const isClickInside = path.some(el =>
-            el === shadowHost ||
+            el === getShadowHost() ||
             (el.classList && (
                 el.classList.contains('translator-popup') ||
                 el.classList.contains('translator-float-buttons') ||
@@ -500,7 +435,7 @@
             ))
         );
 
-        if (!isClickInside && currentPopup) {
+        if (!isClickInside && getCurrentPopup()) {
             removeAllPopups();
         }
 

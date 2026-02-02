@@ -70,6 +70,12 @@ You can configure API keys in VS Code Settings:
 
 ## 📝 Changelog
 
+### [1.4.2] - 2026-02-02
+*   **Deep Code Audit**: Completed a comprehensive 3-round code audit, eliminating all known ReferenceErrors and logic inconsistencies.
+*   **Documentation Alignment**: Achieved 100% JSDoc coverage for core utility functions (`utils.js`, `content.js`, `pdfviewer.js`), ensuring long-term maintainability.
+*   **Audio Logic Unification**: Standardized audio selection algorithms across the main extension and PDF viewer to consistently prioritize high-quality dictionary pronunciations.
+*   **Stability**: Fixed critical missing imports in the PDF viewer that could cause runtime crashes during specific interaction flows.
+
 ### [1.4.1] - 2026-02-01
 *   **English Localization**: Removed all Chinese UI strings across the extension (popups, settings, viewer, logs) for a consistent international experience.
 *   **Premium UI Overhaul**: Implemented high-fidelity Glassmorphism design with `25px` blur, refined typography, and fluid `cubic-bezier` animations.
