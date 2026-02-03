@@ -182,15 +182,24 @@ function buildMWAudioUrl(audioFileName) {
   return `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdirectory}/${audioFileName}.mp3`;
 }
 
-// Precompiled regexes (avoid recompiling on every call)
+// Precompiled regexes for parsing MW definition text (performance optimization)
+/** Removes bold/italic markers: {bc}, {it}, {/it}, {b}, {/b} */
 const MW_REGEX_REMOVE = /\{(?:bc|it|\/it|b|\/b)\}/g;
+/** Converts left/right quote markers to standard quotes */
 const MW_REGEX_QUOTES = /\{(?:ldquo|rdquo)\}/g;
+/** Removes cross-reference links: {sx|...} */
 const MW_REGEX_SX = /\{sx\|[^}]*\}/g;
+/** Removes directional cross-references: {dx}...{/dx} */
 const MW_REGEX_DX = /\{dx\}[\s\S]*?\{\/dx\}/g;
+/** Removes definition cross-references: {dx_def}...{/dx_def} */
 const MW_REGEX_DX_DEF = /\{dx_def\}[\s\S]*?\{\/dx_def\}/g;
+/** Extracts text from anchor links: {a_link|text} -> text */
 const MW_REGEX_A_LINK = /\{a_link\|([^}]*)\}/g;
+/** Extracts text from definition links: {d_link|text|id} -> text */
 const MW_REGEX_D_LINK = /\{d_link\|([^|]*)\|[^}]*\}/g;
+/** Removes any remaining curly brace tags */
 const MW_REGEX_ALL_TAGS = /\{[^}]*\}/g;
+/** Normalizes multiple whitespace to single space */
 const MW_REGEX_WHITESPACE = /\s+/g;
 
 // Parse Merriam-Webster definition text (remove tags) - uses precompiled regexes

@@ -33,7 +33,9 @@ async function translateText(text, targetLang = 'ZH') {
 }
 
 async function translateWithDeepL(text, targetLang, apiKey) {
-    const url = 'https://api-free.deepl.com/v2/translate';
+    // Detect Pro vs Free key (Free keys end with :fx)
+    const isPro = !apiKey.endsWith(':fx');
+    const url = isPro ? 'https://api.deepl.com/v2/translate' : 'https://api-free.deepl.com/v2/translate';
     const postData = new URLSearchParams({
         text: text,
         target_lang: targetLang

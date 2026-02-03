@@ -385,7 +385,7 @@
      * @param {number} y - Viewport Y coordinate.
      */
     async function translateSelection(text, x, y) {
-        removeFloatButtons();
+        removeAllPopups();
         const root = await ensureShadowRoot();
 
         const popup = document.createElement('div');

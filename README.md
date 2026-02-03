@@ -69,6 +69,15 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
+### [1.4.3] - 2026-02-03
+*   **Critical Fix (PDF)**: Resolved a race condition in the PDF Viewer where dictionary and translation popups could overlap. Now enforces strict cleanup (`removeAllPopups`) before showing new results.
+*   **VS Code DeepL Pro**: Added automatic API detection for VS Code Extension. It now correctly identifies Pro keys (non-`:fx`) and switches to the `api.deepl.com` endpoint, mirroring the Chrome extension's capability.
+*   **UI Readability**: Improved the contrast of the "from [root word]" label in popups to ensure high legibility on all backgrounds.
+*   **Reliability**:
+    *   Added timeout protection (3s) to the TTS `waitForVoices` logic to prevent infinite hangs on systems with unstable speech synthesis.
+    *   Simplified API Key validation in options to rely on actual server response rather than brittle format checks.
+    *   Removed dead code citations (`path` module) from the VS Code extension.
+
 
 ### [1.4.2] - 2026-02-02
 *   **Deep Code Audit**: Completed a comprehensive 3-round code audit, eliminating all known ReferenceErrors and logic inconsistencies.

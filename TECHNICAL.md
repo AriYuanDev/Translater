@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.2 (Code Quality & Stability Release)  
-> **Update Date**: 2026-02-02
-> **Key Improvements**: Achieved 100% code audit pass rate, unified audio logic, and finalized comprehensive JSDoc coverage for core modules.
+> **Version**: 1.4.3 (Post-Audit Stabilization)  
+> **Update Date**: 2026-02-03
+> **Key Improvements**: Finalized all issues from the deep code audit, including PDF popup management, VS Code Pro API support, and TTS reliability.
 
 ---
 
@@ -81,7 +81,7 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 
 ---
 
-## 8. Code Quality Standards (v1.4.2 Audit)
+## 8. Code Quality Standards (v1.4.3 Audit)
 
 -   **Documentation Coverage**: All public and core internal functions in `utils.js`, `content.js`, and `pdfviewer.js` feature complete JSDoc annotations.
 -   **Static Analysis**: Codebase passes strict linting for `ReferenceError` and variable scope validation.

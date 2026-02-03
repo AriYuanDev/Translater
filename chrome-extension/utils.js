@@ -137,15 +137,20 @@ export async function sendMessageSafe(message, timeoutMs = 15000) {
     }
 }
 
-// Ensure speech voices are loaded
-function waitForVoices() {
+// Ensure speech voices are loaded with timeout protection
+function waitForVoices(timeoutMs = 3000) {
     return new Promise((resolve) => {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
             resolve(voices);
             return;
         }
+        const timeoutId = setTimeout(() => {
+            window.speechSynthesis.onvoiceschanged = null;
+            resolve(window.speechSynthesis.getVoices()); // Return whatever is available
+        }, timeoutMs);
         const handler = () => {
+            clearTimeout(timeoutId);
             window.speechSynthesis.onvoiceschanged = null;
             resolve(window.speechSynthesis.getVoices());
         };
@@ -306,11 +311,15 @@ export function createSpeakButton(onClick) {
  * Removes all active popups and floating buttons from the Shadow DOM.
  */
 export function removeAllPopups() {
-    if (currentPopup) {
-        currentPopup.remove();
-        currentPopup = null;
+    if (shadowRoot) {
+        shadowRoot.querySelectorAll('.translator-popup, .translator-sentence-popup, .translator-float-buttons').forEach(el => el.remove());
     }
-    removeFloatButtons();
+    currentPopup = null;
+    currentFloatButtons = null;
+    if (hideFloatButtonsTimeout) {
+        clearTimeout(hideFloatButtonsTimeout);
+        hideFloatButtonsTimeout = null;
+    }
 }
 
 /**
@@ -321,10 +330,10 @@ export function removeFloatButtons() {
         clearTimeout(hideFloatButtonsTimeout);
         hideFloatButtonsTimeout = null;
     }
-    if (currentFloatButtons) {
-        currentFloatButtons.remove();
-        currentFloatButtons = null;
+    if (shadowRoot) {
+        shadowRoot.querySelectorAll('.translator-float-buttons').forEach(el => el.remove());
     }
+    currentFloatButtons = null;
 }
 
 /**

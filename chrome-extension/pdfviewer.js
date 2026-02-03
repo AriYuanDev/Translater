@@ -472,7 +472,7 @@ viewer.onmouseup = async (e) => {
  * @param {number} y - Y coordinate.
  */
 async function translateSelection(text, x, y) {
-    removeFloatButtons();
+    removeAllPopups();
     const root = await ensureShadowRoot();
     const popup = document.createElement('div');
     popup.className = 'translator-sentence-popup';

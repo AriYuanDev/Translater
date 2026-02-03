@@ -30,9 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Validate API Key format
-        if (!apiKey.includes(':fx') && apiKey.length < 30) {
-            showStatus('Incorrect API key format, please check again', 'warning');
+        // Basic length check - actual validation is done via API test
+        if (apiKey.length < 20) {
+            showStatus('API key appears to be too short', 'warning');
             return;
         }
 
