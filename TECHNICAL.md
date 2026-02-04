@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.3 (Post-Audit Stabilization)  
+> **Version**: 1.4.4 (Interaction Refinement)  
 > **Update Date**: 2026-02-03
-> **Key Improvements**: Finalized all issues from the deep code audit, including PDF popup management, VS Code Pro API support, and TTS reliability.
+> **Key Improvements**: Refined floating menu interaction: "Speak" button now requires a click to prevent accidental playback, while "Translate" remains hover-triggered.
 
 ---
 
@@ -47,7 +47,9 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
         - The main button plays the professional headword audio from Merriam-Webster.
         - A dedicated mini-speaker icon plays the contextual morphed word using AI TTS.
     - **Async Defense**: Post-await validity checks on `currentPopup` to prevent race condition errors (`TypeError`).
--   **Floating Menu**: Dynamically calculates optimal positioning for selected text, offering "Translate" and "Speak" quick actions.
+-   **Floating Menu**: Dynamically calculates optimal positioning for selected text.
+    -   **Translate**: Triggered on hover for quick access.
+    -   **Speak**: Triggered on click to avoid accidental audio playback during navigation.
 
 ---
 

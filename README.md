@@ -23,7 +23,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 ### Features
 *   **Dictionary Lookup**: Instant popup using Merriam-Webster API. Prioritizes professional audio recordings, falling back to high-quality AI TTS.
 *   **Morphed Word Support**: Intelligent recognition of word forms (plurals, past tense). Displays the origin word and provides specific pronunciation for the morphed variant.
-*   **Smart Hover Actions**: Selected text triggers a premium floating menu with "Translate" and "Speak" quick actions.
+*   **Smart Interactions**: Selected text triggers a premium floating menu. Hover "Translate" for instant meaning, or Click "Speak" for pronunciation (preventing accidental noise).
 *   **Premium Pro UI**: Sophisticated glassmorphism aesthetic with smooth animations, optimized for clarity and focus.
 *   **Fully Internationalized**: 100% English interface, error messaging, and documentation.
 *   **DeepL Integration**: Support for both DeepL Free and Pro APIs for superior sentence translation.
@@ -69,6 +69,8 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
+### [1.4.4] - 2026-02-03
+*   **Interaction Refinement**: Changed the floating "Speak" button trigger from hover to **click**. This prevents accidental audio playback when moving the mouse across the screen, while keeping the "Translate" button hover-triggered for speed.
 ### [1.4.3] - 2026-02-03
 *   **Critical Fix (PDF)**: Resolved a race condition in the PDF Viewer where dictionary and translation popups could overlap. Now enforces strict cleanup (`removeAllPopups`) before showing new results.
 *   **VS Code DeepL Pro**: Added automatic API detection for VS Code Extension. It now correctly identifies Pro keys (non-`:fx`) and switches to the `api.deepl.com` endpoint, mirroring the Chrome extension's capability.

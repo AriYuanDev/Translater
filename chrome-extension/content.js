@@ -335,7 +335,7 @@
                 speakBtn.className = 'translator-float-btn speak-btn';
                 speakBtn.innerHTML = createSpeakerSVG();
                 speakBtn.setAttribute('data-tooltip', 'Speak');
-                speakBtn.onmouseenter = () => speakText(text);
+                speakBtn.onclick = () => speakText(text);
 
                 const transBtn = document.createElement('button');
                 transBtn.className = 'translator-float-btn translate-btn';

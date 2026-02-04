@@ -174,11 +174,12 @@ export async function speakText(text, options = {}) {
         window.speechSynthesis.cancel();
     }
 
-    const { lang = 'en-US', rate = 0.9, pitch = 1 } = options;
+    const { lang = 'en-US', rate = 1.0, pitch = 1.0, volume = 0.8 } = options;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
     utterance.rate = rate;
     utterance.pitch = pitch;
+    utterance.volume = volume;
 
     // Select the best voice
     const voices = await waitForVoices();
