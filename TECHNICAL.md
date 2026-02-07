@@ -1,7 +1,7 @@
 # Translater Technical Documentation
 
 > **Version**: 1.4.4 (Interaction Refinement)  
-> **Update Date**: 2026-02-03
+> **Update Date**: 2026-02-07
 > **Key Improvements**: Refined floating menu interaction: "Speak" button now requires a click to prevent accidental playback, while "Translate" remains hover-triggered.
 
 ---

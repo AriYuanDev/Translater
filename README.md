@@ -45,7 +45,7 @@ Port of the "Translater" extension for VS Code, enabling seamless translation wi
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
 
 ### Installation (.vsix)
-1.  Download `translater-v1.3.1.vsix` from the project root.
+1.  Download `translater-v1.4.4.vsix` from the project root.
 2.  In VS Code, open the Extensions view (`Ctrl+Shift+X`).
 3.  Click the **...** (Views and More Actions) menu and select **Install from VSIX...**.
 4.  Select the `.vsix` file.
@@ -69,8 +69,9 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
-### [1.4.4] - 2026-02-03
+### [1.4.4] - 2026-02-07
 *   **Interaction Refinement**: Changed the floating "Speak" button trigger from hover to **click**. This prevents accidental audio playback when moving the mouse across the screen, while keeping the "Translate" button hover-triggered for speed.
+*   **VS Code Reliability**: Fixed missing `activationEvents`, provided a Node16-compatible HTTPS client (no native `fetch` dependency), and added automated lint/test coverage for the `Translate Selection` command.
 ### [1.4.3] - 2026-02-03
 *   **Critical Fix (PDF)**: Resolved a race condition in the PDF Viewer where dictionary and translation popups could overlap. Now enforces strict cleanup (`removeAllPopups`) before showing new results.
 *   **VS Code DeepL Pro**: Added automatic API detection for VS Code Extension. It now correctly identifies Pro keys (non-`:fx`) and switches to the `api.deepl.com` endpoint, mirroring the Chrome extension's capability.

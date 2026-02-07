@@ -3,7 +3,7 @@
     "publisher": "local",
     "displayName": "Translater for VS Code",
     "description": "Port of the Translater Chrome Extension. Supports selection translation.",
-    "version": "1.3.1",
+    "version": "1.4.4",
     "icon": "icon.png",
     "engines": {
         "vscode": "^1.80.0"
@@ -11,7 +11,9 @@
     "categories": [
         "Other"
     ],
-    "activationEvents": [],
+    "activationEvents": [
+        "onCommand:translater.translateSelection"
+    ],
     "main": "./extension.js",
     "contributes": {
         "commands": [
@@ -40,7 +42,7 @@
         }
     },
     "scripts": {
-        "lint": "eslint .",
+        "lint": "eslint --ext .js src extension.js test",
         "pretest": "npm run lint",
         "test": "node ./test/runTest.js"
     },
@@ -54,5 +56,9 @@
         "mocha": "^10.2.0",
         "typescript": "^5.1.3",
         "@vscode/test-electron": "^2.3.2"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/example/translater.git"
     }
 }

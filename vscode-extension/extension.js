@@ -27,7 +27,7 @@ function activate(context) {
                 location: vscode.ProgressLocation.Notification,
                 title: "Translating...",
                 cancellable: false
-            }, async (progress) => {
+            }, async () => {
                 const result = await translateText(text);
                 vscode.window.showInformationMessage(`Translation: ${result}`, 'Copy').then(selection => {
                     if (selection === 'Copy') {
