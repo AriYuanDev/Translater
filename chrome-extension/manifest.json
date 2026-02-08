@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Translater - Smart Translation Assistant",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Double-click for dictionary, select for translation with DeepL support and PDF reader integration.",
   "permissions": [
     "activeTab",

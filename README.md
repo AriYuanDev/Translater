@@ -28,6 +28,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 *   **Fully Internationalized**: 100% English interface, error messaging, and documentation.
 *   **DeepL Integration**: Support for both DeepL Free and Pro APIs for superior sentence translation.
 *   **PDF Reader**: Advanced built-in PDF viewer with integrated translation tools, sidebar navigation, and full-screen support.
+*   **Outline Auto-Sync**: PDF reader sidebar highlights the current page and follows scrolling with anchored zoom behavior.
 
 ### Installation
 1.  Open Chrome → `chrome://extensions/`
@@ -45,7 +46,7 @@ Port of the "Translater" extension for VS Code, enabling seamless translation wi
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
 
 ### Installation (.vsix)
-1.  Download `translater-v1.4.4.vsix` from the project root.
+1.  Download `translater-v1.4.5.vsix` from the project root.
 2.  In VS Code, open the Extensions view (`Ctrl+Shift+X`).
 3.  Click the **...** (Views and More Actions) menu and select **Install from VSIX...**.
 4.  Select the `.vsix` file.
@@ -69,6 +70,11 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
+### [1.4.5] - 2026-02-08
+*   **PDF Sidebar Now Tracks Current Page**: Automatically highlights the active outline entry and keeps it visible while scrolling through the document.
+*   **Zoom Anchor Stability**: When zooming in/out or fitting width, the viewer preserves the content at the center of the screen to prevent sudden jumps.
+*   **PDF Interaction Polish**: General refinements to keep sidebar toggling and zoom controls in sync with the new anchor logic.
+
 ### [1.4.4] - 2026-02-07
 *   **Interaction Refinement**: Changed the floating "Speak" button trigger from hover to **click**. This prevents accidental audio playback when moving the mouse across the screen, while keeping the "Translate" button hover-triggered for speed.
 *   **VS Code Reliability**: Fixed missing `activationEvents`, provided a Node16-compatible HTTPS client (no native `fetch` dependency), and added automated lint/test coverage for the `Translate Selection` command.

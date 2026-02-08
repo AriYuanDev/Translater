@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.4 (Interaction Refinement)  
-> **Update Date**: 2026-02-07
-> **Key Improvements**: Refined floating menu interaction: "Speak" button now requires a click to prevent accidental playback, while "Translate" remains hover-triggered.
+> **Version**: 1.4.5 (PDF Navigation Sync)  
+> **Update Date**: 2026-02-08
+> **Key Improvements**: PDF viewer now keeps the active sidebar outline entry and zoom anchor in sync, preventing jumps during scroll or zoom interactions.
 
 ---
 
@@ -58,6 +58,8 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 -   **Engine**: Built on PDF.js v4.x.
 -   **Lazy Rendering**: Utilizes `IntersectionObserver` for on-demand page rendering, significantly reducing memory footprint for large documents.
 -   **UI Sync**: The internal PDF translation popup uses the same Shadow DOM technology as the content script for a seamless transition.
+-   **Outline Auto-mapping**: Outline nodes are resolved to page indices once (`resolveOutlinePage`) and cached in `outlineEntries`, enabling automatic highlighting and smooth scrolling of the sidebar as users navigate.
+-   **Zoom Anchor Preservation**: `captureScrollAnchor` records the viewport center before scale changes; `applyScale` re-renders pages and `restoreScrollAnchor` keeps the same content centered after zoom/fit width operations.
 
 ---
 
