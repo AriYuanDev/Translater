@@ -11,21 +11,33 @@
     "categories": [
         "Other"
     ],
-    "activationEvents": [
-        "onCommand:translater.translateSelection"
-    ],
+    "activationEvents": [],
     "main": "./extension.js",
     "contributes": {
         "commands": [
             {
                 "command": "translater.translateSelection",
                 "title": "Translate Selection"
+            },
+            {
+                "command": "translater.showTranslation",
+                "title": "Show Translation"
+            },
+            {
+                "command": "translater.openPremiumPreview",
+                "title": "Translater: Open Premium Translation Preview"
             }
         ],
         "menus": {
             "editor/context": [
                 {
                     "command": "translater.translateSelection",
+                    "when": "editorHasSelection",
+                    "group": "navigation"
+                },
+                {
+                    "command": "translater.openPremiumPreview",
+                    "when": "resourceLangId == markdown",
                     "group": "navigation"
                 }
             ]
@@ -39,7 +51,26 @@
                     "description": "API Key for DeepL Translation service."
                 }
             }
-        }
+        },
+        "markdown.previewScripts": [
+            "./media/markdownPreview.js"
+        ],
+        "markdown.previewStyles": [
+            "./media/markdownPreview.css"
+        ],
+        "markdown.markdownItPlugins": true,
+        "customEditors": [
+            {
+                "viewType": "translater.premiumPreview",
+                "displayName": "Premium Translation Preview",
+                "selector": [
+                    {
+                        "filenamePattern": "*.md"
+                    }
+                ],
+                "priority": "option"
+            }
+        ]
     },
     "scripts": {
         "lint": "eslint --ext .js src extension.js test",

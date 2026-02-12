@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
 > **Version**: 1.4.7 (Dictionary Duo)  
-> **Update Date**: 2026-02-10
-> **Key Improvements**: 全面同步主站与 PDF 弹窗 UI，词典释义支持中英并排展示，并为所有弹窗提供更宽裕的布局与居中定位体验。
+> **Update Date**: 2026-02-11  
+> **Key Improvements**: 全面同步主站与 PDF 弹窗 UI，词典释义支持中英并排展示。VS Code 插件新增 Markdown 预览翻译支持，具备完整的选词浮层交互体验。
 
 ---
 
@@ -65,8 +65,21 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 
 ## 5. VS Code Extension
 
--   **Lightweight Philosophy**: Excludes Hover UI to maintain editor purity, accessible via the "Translate Selection" context menu command.
+- **Selective Component Loading**: Excludes Hover UI from the main text editor to maintain purity, while providing a full selection-based experience in **Markdown Preview** mode.
+- **Command Proxy Bridge**: Uses VS Code `command:` URIs to bridge the isolated Preview webview with the extension host. This bypasses webview CSP/CORS restrictions and ensures translation works across all network environments (including enterprise proxies) by performing requests in the Node.js extension context.
+- **Markdown-it Extension**: Implements a dedicated plugin to inject the necessary configuration into the Preview render context.
 -   **Modern Networking**: Uses native `fetch` instead of the legacy Node.js `https` module for improved stability and redirection handling.
+
+### 5.1 Premium Preview Architecture
+-   **Custom Editor Provider**: Implements `vscode.CustomTextEditorProvider` to render Markdown files in a specialized webview.
+-   **Rendering Strategy**: Leverages VS Code's internal `markdown.api.render` command to ensure consistent Markdown parsing (including syntax highlighting and potential future extension support) while injecting custom easy-to-read styles.
+-   **Bi-directional Communication**:
+    1.  **User Selection**: Webview JS captures selection -> `vscode.postMessage('translate')`.
+    2.  **Extension Processing**: Extension Host receives message -> Calls Translation API (DeepL) -> Returns result.
+    3.  **Result Display**: Webview receives `translationResult` -> Displays Glassmorphism popup (`premium-popup`).
+-   **Design System**:
+    -   **Theming**: Consumes VS Code CSS variables (e.g., `--vscode-editor-background`) for seamless dark/light mode switching.
+    -   **Glassmorphism**: `premiumPreview.css` applies backdrop-filter effects to popups, mirroring the Chrome extension's "Pro" aesthetic.
 
 ---
 

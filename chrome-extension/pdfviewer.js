@@ -616,7 +616,7 @@ viewer.onmouseup = async (e) => {
             const root = await ensureShadowRoot();
             const floatButtons = document.createElement('div');
             floatButtons.className = 'translator-float-buttons';
-            const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onmouseenter = () => speakText(text);
+            const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onclick = () => speakText(text);
             const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
             const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
             floatButtons.append(sBtn, tBtn, cBtn);

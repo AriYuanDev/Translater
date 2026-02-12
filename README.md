@@ -44,6 +44,8 @@ Port of the "Translater" extension for VS Code, enabling seamless translation wi
 
 ### Features
 *   **Context Menu**: Select text, right-click, and choose "Translate Selection".
+*   **Markdown Preview Translation**: Full dictionary and sentence translation support directly within the VS Code Markdown "Open Preview" mode. Double-click for words, or select text for a floating translation button.
+*   **Premium Translation Preview**: A custom editor view (`.md` files -> Open with... -> Premium Translation Preview) offering a distraction-free reading experience with embedded translation tools and glassmorphism UI.
 
 ### Installation (.vsix)
 1.  Download `translater-v1.4.5.vsix` from the project root.
@@ -51,7 +53,7 @@ Port of the "Translater" extension for VS Code, enabling seamless translation wi
 3.  Click the **...** (Views and More Actions) menu and select **Install from VSIX...**.
 4.  Select the `.vsix` file.
 
-> [!NOTE]
+> [!NOTE]  
 > If the file was downloaded with a `.zip` or `.pkg` extension due to system security settings, simply rename it back to `.vsix` before installing.
 
 ### Configuration
@@ -70,10 +72,11 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
-### [1.4.7] - 2026-02-10
+### [1.4.7] - 2026-02-11
 *   **中英并排释义**：双击弹窗和 PDF 词典均将 Merriam-Webster 英文释义与 DeepL 中文翻译并排展示，暗色模式下自动提亮对比度。
+*   **VS Code Markdown 预览翻译**：为 VS Code 阅读器（Markdown Preview）引入了完整的选词翻译功能，通过注入脚本和样式提供与 Chrome 插件一致的交互体验。
 *   **弹窗宽度提升**：主站与 PDF 词典弹窗宽度统一提升至 760px，句子翻译弹窗固定 420px；所有弹窗均在鼠标正下方居中展开，减少视线移动。
-*   **PDF 同步优化**：PDF Viewer 的弹窗样式、翻译缓存逻辑与主站一致，保证在文档阅读场景下获得同等级体验。
+*   **PDF 同步优化**：PDF Viewer 的弹窗样式、翻译缓存逻辑与主站一致，并修复了播放按钮触发逻辑（改为点击触发）。
 
 ### [1.4.6] - 2026-02-08
 *   **PDF Sidebar Now Tracks Current Page**: Automatically highlights the active outline entry and keeps it visible while scrolling through the document.
