@@ -69,24 +69,56 @@ export function getURLSafe(path) {
  * @param {number} popupHeight - Estimated popup height.
  * @returns {{left: number, top: number}} The calculated position.
  */
-export function calculatePopupPosition(x, y, popupWidth, popupHeight) {
+export function calculatePopupPosition(x, y, popupWidth, popupHeight, options = {}) {
     const padding = 10;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    let left = x + padding;
-    let top = y + padding;
+    const {
+        preferBelow = true,
+        alignCenter = false,
+        anchorX = x,
+        anchorY = y
+    } = options;
 
-    if (left + popupWidth > viewportWidth - padding) {
-        left = x - popupWidth - padding;
+    let left;
+    if (alignCenter) {
+        left = anchorX - popupWidth / 2;
+    } else {
+        left = anchorX + padding;
+        if (left + popupWidth > viewportWidth - padding) {
+            left = anchorX - popupWidth - padding;
+        }
     }
 
+    let top;
+    if (preferBelow) {
+        top = anchorY + padding;
+        if (top + popupHeight > viewportHeight - padding) {
+            top = anchorY - popupHeight - padding;
+        }
+    } else {
+        top = anchorY - popupHeight - padding;
+        if (top < padding) {
+            top = anchorY + padding;
+        }
+    }
+
+    if (alignCenter) {
+        if (left < padding) left = padding;
+        if (left + popupWidth > viewportWidth - padding) {
+            left = viewportWidth - popupWidth - padding;
+        }
+    } else {
+        left = Math.max(padding, left);
+    }
+
+    if (top < padding) {
+        top = padding;
+    }
     if (top + popupHeight > viewportHeight - padding) {
-        top = y - popupHeight - padding;
+        top = Math.max(padding, viewportHeight - popupHeight - padding);
     }
-
-    left = Math.max(padding, left);
-    top = Math.max(padding, top);
 
     return { left, top };
 }

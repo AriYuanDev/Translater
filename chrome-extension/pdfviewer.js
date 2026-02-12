@@ -66,14 +66,77 @@ const DEFAULT_SCALE = 1.9;
 const ZOOM_STEP = 0.25;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4.0;
-const POPUP_WIDTH = 350;
-const POPUP_HEIGHT = 200;
-const SENTENCE_POPUP_WIDTH = 400;
-const SENTENCE_POPUP_HEIGHT = 150;
+const POPUP_WIDTH = 760;
+const POPUP_HEIGHT = 260;
+const SENTENCE_POPUP_WIDTH = 420;
+const SENTENCE_POPUP_HEIGHT = 180;
 const FLOAT_BTN_WIDTH = 32;
 const FLOAT_BTN_GAP = 30;
 
 let pageObserver = null;
+const definitionTranslationCache = new Map();
+
+function createDefinitionPair(definitionText) {
+    const trimmed = (definitionText || '').trim();
+    const pair = document.createElement('div');
+    pair.className = 'translator-definition-pair';
+
+    const english = document.createElement('div');
+    english.className = 'translator-definition translator-definition-en';
+    english.textContent = definitionText || '—';
+    pair.appendChild(english);
+
+    const chinese = document.createElement('div');
+    chinese.className = 'translator-definition translator-definition-zh';
+    chinese.textContent = trimmed ? '翻译中…' : '—';
+    chinese.dataset.definitionKey = trimmed;
+    pair.appendChild(chinese);
+
+    if (trimmed) {
+        translateDefinitionToChinese(trimmed, chinese);
+    }
+
+    return pair;
+}
+
+function translateDefinitionToChinese(text, targetEl) {
+    const translationPromise = getDefinitionTranslationPromise(text);
+    translationPromise.then(result => {
+        if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
+        if (result && result.success && result.data && result.data.translated) {
+            targetEl.textContent = result.data.translated;
+            targetEl.classList.remove('translator-definition-zh-error');
+        } else {
+            const localizedError = (result && result.error === 'Please configure DeepL API Key')
+                ? '请先在扩展选项中配置 DeepL API Key'
+                : (result && result.error) || '翻译不可用';
+            targetEl.textContent = localizedError;
+            targetEl.classList.add('translator-definition-zh-error');
+        }
+    }).catch(() => {
+        if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
+        targetEl.textContent = '翻译失败';
+        targetEl.classList.add('translator-definition-zh-error');
+    });
+}
+
+function getDefinitionTranslationPromise(text) {
+    if (definitionTranslationCache.has(text)) {
+        return definitionTranslationCache.get(text);
+    }
+
+    const promise = sendMessageSafe({
+        action: 'translate',
+        text,
+        targetLang: 'zh-CN'
+    }).then(response => {
+        if (response) return response;
+        return { success: false, error: '翻译不可用' };
+    }).catch(error => ({ success: false, error: error?.message || '翻译失败' }));
+
+    definitionTranslationCache.set(text, promise);
+    return promise;
+}
 
 function clampScale(scale) {
     return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
@@ -430,7 +493,13 @@ viewer.addEventListener('dblclick', async (e) => {
     root.appendChild(popup);
     setCurrentPopup(popup);
 
-    const pos = calculatePopupPosition(e.clientX, e.clientY, POPUP_WIDTH, POPUP_HEIGHT);
+    const width = Math.min(POPUP_WIDTH, window.innerWidth - 20);
+    const pos = calculatePopupPosition(e.clientX, e.clientY, width, POPUP_HEIGHT, {
+        preferBelow: true,
+        alignCenter: true,
+        anchorX: e.clientX,
+        anchorY: e.clientY
+    });
     popup.style.left = pos.left + 'px';
     popup.style.top = pos.top + 'px';
 
@@ -526,8 +595,8 @@ function updatePopupWithData(data, word) {
             const pos = document.createElement('span'); pos.className = 'translator-pos'; pos.textContent = m.partOfSpeech;
             item.appendChild(pos);
             m.definitions.slice(0, 2).forEach(d => {
-                const def = document.createElement('div'); def.className = 'translator-definition'; def.textContent = d.definition;
-                item.appendChild(def);
+                const pair = createDefinitionPair(d.definition);
+                item.appendChild(pair);
                 if (d.example) { const ex = document.createElement('div'); ex.className = 'translator-example'; ex.textContent = `"${d.example}"`; item.appendChild(ex); }
             });
             meaningsCont.appendChild(item);
@@ -590,7 +659,13 @@ async function translateSelection(text, x, y) {
     root.appendChild(popup);
     setCurrentPopup(popup);
 
-    const pos = calculatePopupPosition(x, y, SENTENCE_POPUP_WIDTH, SENTENCE_POPUP_HEIGHT);
+    const width = Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20);
+    const pos = calculatePopupPosition(x, y, width, SENTENCE_POPUP_HEIGHT, {
+        preferBelow: true,
+        alignCenter: true,
+        anchorX: x,
+        anchorY: y
+    });
     popup.style.left = pos.left + 'px';
     popup.style.top = pos.top + 'px';
 

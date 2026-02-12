@@ -44,6 +44,8 @@
         findBestAudioUrl
     } = utils;
 
+    const definitionTranslationCache = new Map();
+
     // Preload speech engine
     if (typeof speechSynthesis !== 'undefined') {
         speechSynthesis.getVoices();
@@ -78,7 +80,14 @@
         setCurrentPopup(popup);
 
         // Initial positioning using fixed width estimate
-        const pos = calculatePopupPosition(x, y, 350, 200);
+        const popupWidth = Math.min(760, window.innerWidth - 20);
+        const popupHeightEstimate = 260;
+        const pos = calculatePopupPosition(x, y, popupWidth, popupHeightEstimate, {
+            preferBelow: true,
+            alignCenter: true,
+            anchorX: x,
+            anchorY: y
+        });
         popup.style.left = pos.left + 'px';
         popup.style.top = pos.top + 'px';
 
@@ -123,6 +132,68 @@
         fragment.appendChild(createCloseButton(removeAllPopups));
 
         return fragment;
+    }
+
+    function createDefinitionPair(definitionText) {
+        const trimmed = (definitionText || '').trim();
+        const pair = document.createElement('div');
+        pair.className = 'translator-definition-pair';
+
+        const english = document.createElement('div');
+        english.className = 'translator-definition translator-definition-en';
+        english.textContent = definitionText;
+        pair.appendChild(english);
+
+        const chinese = document.createElement('div');
+        chinese.className = 'translator-definition translator-definition-zh';
+        chinese.textContent = trimmed ? '翻译中…' : '—';
+        chinese.dataset.definitionKey = trimmed;
+        pair.appendChild(chinese);
+
+        if (trimmed) {
+            translateDefinitionToChinese(trimmed, chinese);
+        }
+
+        return pair;
+    }
+
+    function translateDefinitionToChinese(text, targetEl) {
+        const translationPromise = getDefinitionTranslationPromise(text);
+        translationPromise.then(result => {
+            if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
+            if (result && result.success && result.data && result.data.translated) {
+                targetEl.textContent = result.data.translated;
+                targetEl.classList.remove('translator-definition-zh-error');
+            } else {
+                const localizedError = (result && result.error === 'Please configure DeepL API Key')
+                    ? '请先在扩展选项中配置 DeepL API Key'
+                    : (result && result.error) || '翻译不可用';
+                targetEl.textContent = localizedError;
+                targetEl.classList.add('translator-definition-zh-error');
+            }
+        }).catch(() => {
+            if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
+            targetEl.textContent = '翻译失败';
+            targetEl.classList.add('translator-definition-zh-error');
+        });
+    }
+
+    function getDefinitionTranslationPromise(text) {
+        if (definitionTranslationCache.has(text)) {
+            return definitionTranslationCache.get(text);
+        }
+
+        const promise = sendMessageSafe({
+            action: 'translate',
+            text,
+            targetLang: 'zh-CN'
+        }).then(response => {
+            if (response) return response;
+            return { success: false, error: '翻译不可用' };
+        }).catch(error => ({ success: false, error: error?.message || '翻译失败' }));
+
+        definitionTranslationCache.set(text, promise);
+        return promise;
     }
 
     /**
@@ -209,10 +280,8 @@
                 item.appendChild(pos);
 
                 meaning.definitions.slice(0, 2).forEach(def => {
-                    const d = document.createElement('div');
-                    d.className = 'translator-definition';
-                    d.textContent = def.definition;
-                    item.appendChild(d);
+                    const definitionPair = createDefinitionPair(def.definition);
+                    item.appendChild(definitionPair);
 
                     if (def.example) {
                         const ex = document.createElement('div');
@@ -405,7 +474,13 @@
         root.appendChild(popup);
         setCurrentPopup(popup);
 
-        const pos = calculatePopupPosition(x, y, 350, 150);
+        const sentenceWidth = Math.min(420, window.innerWidth - 20);
+        const pos = calculatePopupPosition(x, y, sentenceWidth, 180, {
+            preferBelow: true,
+            alignCenter: true,
+            anchorX: x,
+            anchorY: y
+        });
         popup.style.left = pos.left + 'px';
         popup.style.top = pos.top + 'px';
 

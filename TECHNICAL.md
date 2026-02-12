@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.5 (PDF Navigation Sync)  
-> **Update Date**: 2026-02-08
-> **Key Improvements**: PDF viewer now keeps the active sidebar outline entry and zoom anchor in sync, preventing jumps during scroll or zoom interactions.
+> **Version**: 1.4.7 (Dictionary Duo)  
+> **Update Date**: 2026-02-10
+> **Key Improvements**: 全面同步主站与 PDF 弹窗 UI，词典释义支持中英并排展示，并为所有弹窗提供更宽裕的布局与居中定位体验。
 
 ---
 

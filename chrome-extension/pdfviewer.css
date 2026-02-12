@@ -390,8 +390,7 @@ body {
 .translator-popup {
     position: fixed;
     z-index: 2147483647;
-    max-width: 380px;
-    min-width: 300px;
+    width: min(760px, calc(100vw - 20px));
     /* More rich flowing gradient background - consistent with web version */
     background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
     border-radius: 20px;
@@ -535,6 +534,59 @@ body {
     font-weight: 400;
 }
 
+.translator-definition-pair {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.translator-definition-en,
+.translator-definition-zh {
+    flex: 1;
+    padding: 10px 12px;
+    min-height: 48px;
+}
+
+.translator-definition-en {
+    background: rgba(143, 211, 244, 0.15);
+    border-right: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.translator-definition-zh {
+    background: rgba(255, 255, 255, 0.9);
+    color: #2d3436;
+    font-weight: 500;
+}
+
+.translator-definition-zh::before {
+    content: '中译';
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: rgba(52, 73, 94, 0.7);
+    margin-bottom: 4px;
+}
+
+.translator-definition-en::before {
+    content: 'English';
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: rgba(52, 73, 94, 0.7);
+    margin-bottom: 4px;
+}
+
+.translator-definition-zh-error {
+    color: #c0392b;
+}
+
 .translator-translation {
     font-size: 16px;
     color: #2d3436;
@@ -599,12 +651,19 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(161, 140, 209, 0.1);
-    width: 380px;
     padding: 4px;
     color: #f5f5f7;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
     animation: translator-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
+}
+
+.translator-popup {
+    width: min(760px, calc(100vw - 20px));
+}
+
+.translator-sentence-popup {
+    width: min(420px, calc(100vw - 20px));
 }
 
 @keyframes translator-in {
@@ -732,17 +791,7 @@ body {
 
 /* ==================== Sentence Translation Popup ==================== */
 
-.translator-sentence-popup {
-    position: fixed;
-    z-index: 2147483647;
-    max-width: 450px;
-    min-width: 300px;
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    animation: popupFadeIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    overflow: hidden;
-}
+/* existing translator-sentence-popup block removed (styles folded above) */
 
 /* Custom sentence styles */
 .translator-sentence-content {

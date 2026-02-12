@@ -70,7 +70,12 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
-### [1.4.5] - 2026-02-08
+### [1.4.7] - 2026-02-10
+*   **中英并排释义**：双击弹窗和 PDF 词典均将 Merriam-Webster 英文释义与 DeepL 中文翻译并排展示，暗色模式下自动提亮对比度。
+*   **弹窗宽度提升**：主站与 PDF 词典弹窗宽度统一提升至 760px，句子翻译弹窗固定 420px；所有弹窗均在鼠标正下方居中展开，减少视线移动。
+*   **PDF 同步优化**：PDF Viewer 的弹窗样式、翻译缓存逻辑与主站一致，保证在文档阅读场景下获得同等级体验。
+
+### [1.4.6] - 2026-02-08
 *   **PDF Sidebar Now Tracks Current Page**: Automatically highlights the active outline entry and keeps it visible while scrolling through the document.
 *   **Zoom Anchor Stability**: When zooming in/out or fitting width, the viewer preserves the content at the center of the screen to prevent sudden jumps.
 *   **PDF Interaction Polish**: General refinements to keep sidebar toggling and zoom controls in sync with the new anchor logic.
