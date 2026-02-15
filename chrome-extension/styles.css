@@ -196,7 +196,7 @@
 }
 
 .translator-definition-zh::before {
-  content: '中译';
+  content: 'Chinese';
   display: block;
   font-size: 11px;
   font-weight: 700;

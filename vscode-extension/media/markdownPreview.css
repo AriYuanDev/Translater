@@ -139,7 +139,7 @@
 }
 
 .translator-definition-zh::before {
-    content: '译: ';
+    content: 'Translation: ';
     font-size: 12px;
     color: #8e44ad;
 }

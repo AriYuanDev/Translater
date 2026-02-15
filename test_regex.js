@@ -14,6 +14,6 @@ console.log("Text:", text);
 console.log("Old check result:", isAllEnglishOld(text));
 console.log("New check result:", isAllEnglishNew(text));
 
-const cjkText = "Hello 世界";
+const cjkText = "Hello \u4e16\u754c"; // Intentionally includes CJK characters for validation
 console.log("CJK Text:", cjkText);
 console.log("New check CJK result (should be false):", isAllEnglishNew(cjkText));

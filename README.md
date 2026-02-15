@@ -73,10 +73,10 @@ You can configure API keys in VS Code Settings:
 
 ## 📝 Changelog
 ### [1.4.7] - 2026-02-11
-*   **中英并排释义**：双击弹窗和 PDF 词典均将 Merriam-Webster 英文释义与 DeepL 中文翻译并排展示，暗色模式下自动提亮对比度。
-*   **VS Code Markdown 预览翻译**：为 VS Code 阅读器（Markdown Preview）引入了完整的选词翻译功能，通过注入脚本和样式提供与 Chrome 插件一致的交互体验。
-*   **弹窗宽度提升**：主站与 PDF 词典弹窗宽度统一提升至 760px，句子翻译弹窗固定 420px；所有弹窗均在鼠标正下方居中展开，减少视线移动。
-*   **PDF 同步优化**：PDF Viewer 的弹窗样式、翻译缓存逻辑与主站一致，并修复了播放按钮触发逻辑（改为点击触发）。
+*   **Side-by-Side Definitions**: Double-click popups and the PDF dictionary now show Merriam-Webster definitions alongside DeepL translations with boosted contrast in dark mode.
+*   **VS Code Markdown Preview Translation**: Injected scripts and styles bring the full floating selection menu to Markdown Preview so the editor matches the Chrome interaction model.
+*   **Popup Width Alignment**: Main and PDF dictionary popups now share a 760px canvas; sentence translation popups remain 420px and open centered beneath the cursor to reduce eye travel.
+*   **PDF Synchronization Polish**: Unified popup styling, translation caching, and fixed the speaker button to trigger on click for perfect parity with the main experience.
 
 ### [1.4.6] - 2026-02-08
 *   **PDF Sidebar Now Tracks Current Page**: Automatically highlights the active outline entry and keeps it visible while scrolling through the document.

@@ -88,7 +88,7 @@ function createDefinitionPair(definitionText) {
 
     const chinese = document.createElement('div');
     chinese.className = 'translator-definition translator-definition-zh';
-    chinese.textContent = trimmed ? '翻译中…' : '—';
+    chinese.textContent = trimmed ? 'Translating…' : '—';
     chinese.dataset.definitionKey = trimmed;
     pair.appendChild(chinese);
 
@@ -108,14 +108,14 @@ function translateDefinitionToChinese(text, targetEl) {
             targetEl.classList.remove('translator-definition-zh-error');
         } else {
             const localizedError = (result && result.error === 'Please configure DeepL API Key')
-                ? '请先在扩展选项中配置 DeepL API Key'
-                : (result && result.error) || '翻译不可用';
+                ? 'Please configure a DeepL API Key in extension options'
+                : (result && result.error) || 'Translation unavailable';
             targetEl.textContent = localizedError;
             targetEl.classList.add('translator-definition-zh-error');
         }
     }).catch(() => {
         if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
-        targetEl.textContent = '翻译失败';
+        targetEl.textContent = 'Translation failed';
         targetEl.classList.add('translator-definition-zh-error');
     });
 }
@@ -131,8 +131,8 @@ function getDefinitionTranslationPromise(text) {
         targetLang: 'zh-CN'
     }).then(response => {
         if (response) return response;
-        return { success: false, error: '翻译不可用' };
-    }).catch(error => ({ success: false, error: error?.message || '翻译失败' }));
+        return { success: false, error: 'Translation unavailable' };
+    }).catch(error => ({ success: false, error: error?.message || 'Translation failed' }));
 
     definitionTranslationCache.set(text, promise);
     return promise;

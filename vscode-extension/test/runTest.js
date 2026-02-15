@@ -10,7 +10,7 @@ async function run() {
             status: 200,
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-                translations: [{ text: '你好' }]
+                translations: [{ text: 'hello-world' }]
             })
         };
     });
@@ -18,7 +18,7 @@ async function run() {
     process.env.DEEPL_API_KEY = 'test-key';
 
     const result = await translateText('hello');
-    assert.strictEqual(result, '你好');
+    assert.strictEqual(result, 'hello-world');
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0].headers['Authorization'] || calls[0].headers['authorization'], 'DeepL-Auth-Key test-key');
 

@@ -2,7 +2,7 @@
 
 > **Version**: 1.4.7 (Dictionary Duo)  
 > **Update Date**: 2026-02-11  
-> **Key Improvements**: 全面同步主站与 PDF 弹窗 UI，词典释义支持中英并排展示。VS Code 插件新增 Markdown 预览翻译支持，具备完整的选词浮层交互体验。
+> **Key Improvements**: Unified popup UI across the main site and PDF reader, added side-by-side dictionary + translation display, and brought the full selection overlay to the VS Code Markdown Preview.
 
 ---
 
