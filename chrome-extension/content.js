@@ -41,7 +41,8 @@
         setCurrentFloatButtons,
         getCurrentFloatButtons,
         getShadowHost,
-        findBestAudioUrl
+        findBestAudioUrl,
+        isProbablyWord
     } = utils;
 
     const definitionTranslationCache = new Map();
@@ -329,7 +330,7 @@
         const selection = window.getSelection();
         const word = selection.toString().trim();
 
-        if (!word || !isAllEnglish(word)) return;
+        if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
 
         await showPopup(e.clientX, e.clientY, createLoadingPopup(word));
 
@@ -390,7 +391,7 @@
                 if (e.target.id === 'translator-extension-host') return;
                 removeFloatButtons();
 
-                if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
+                if (!text || !isAllEnglish(text) || isProbablyWord(text)) return;
 
                 const root = await ensureShadowRoot();
                 const floatButtons = document.createElement('div');

@@ -17,12 +17,28 @@ export function escapeHtml(text) {
 // Detect if text is entirely English (and does not contain CJK characters)
 /**
  * Checks if a string consists entirely of English characters and symbols.
+ * Now allows common English punctuation and whitespace.
  * @param {string} text
  * @returns {boolean}
  */
 export function isAllEnglish(text) {
+    if (!text) return false;
     const cjkRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
     return !cjkRegex.test(text);
+}
+
+/**
+ * Heuristic to determine if the text is probably a single word or a short compound word.
+ * @param {string} text 
+ * @returns {boolean}
+ */
+export function isProbablyWord(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    // A word should not have spaces inside (excluding trailing/leading)
+    if (/\s/.test(trimmed)) return false;
+    // Check if it's mostly alphabetical/numeric with common word connectors like '-' or '''
+    return /^[a-zA-Z0-9\-\']+$/.test(trimmed);
 }
 
 // Create pronunciation icon SVG

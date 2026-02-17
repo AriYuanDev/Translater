@@ -14,6 +14,26 @@ console.log("Text:", text);
 console.log("Old check result:", isAllEnglishOld(text));
 console.log("New check result:", isAllEnglishNew(text));
 
-const cjkText = "Hello \u4e16\u754c"; // Intentionally includes CJK characters for validation
-console.log("CJK Text:", cjkText);
-console.log("New check CJK result (should be false):", isAllEnglishNew(cjkText));
+
+function isProbablyWord(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (/\s/.test(trimmed)) return false;
+    return /^[a-zA-Z0-9\-\']+$/.test(trimmed);
+}
+
+console.log("--- Word Detection Heuristic Tests ---");
+const testCases = [
+    { text: "Information", expected: true },
+    { text: "high-quality", expected: true },
+    { text: "don't", expected: true },
+    { text: "hello world", expected: false },
+    { text: "This is a sentence.", expected: false },
+    { text: "   trimmed-word   ", expected: true },
+    { text: "12345", expected: true }
+];
+
+testCases.forEach(tc => {
+    const result = isProbablyWord(tc.text);
+    console.log(`Text: "${tc.text}" -> Result: ${result} (Expected: ${tc.expected}) ${result === tc.expected ? '✅' : '❌'}`);
+});
