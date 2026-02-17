@@ -111,13 +111,29 @@ function isPdfUrl(url) {
   }
 }
 
-// Monitor navigation to detect and redirect PDFs
+// Check if URL is a Markdown file
+function isMdUrl(url) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname.toLowerCase();
+    return pathname.endsWith('.md') || pathname.endsWith('.markdown');
+  } catch {
+    const lower = url.toLowerCase();
+    return lower.endsWith('.md') || lower.endsWith('.markdown');
+  }
+}
+
+// Monitor navigation to detect and redirect PDFs and Markdown files
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
-  if (details.url.includes('pdfviewer.html')) return;
+  if (details.url.includes('pdfviewer.html') || details.url.includes('mdviewer.html')) return;
 
   if (isPdfUrl(details.url)) {
     const viewerUrl = chrome.runtime.getURL('pdfviewer.html') + '?url=' + encodeURIComponent(details.url);
+    chrome.tabs.update(details.tabId, { url: viewerUrl });
+  } else if (isMdUrl(details.url)) {
+    const viewerUrl = chrome.runtime.getURL('mdviewer.html') + '?url=' + encodeURIComponent(details.url);
     chrome.tabs.update(details.tabId, { url: viewerUrl });
   }
 });

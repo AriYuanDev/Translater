@@ -1,8 +1,8 @@
 # Translater Technical Documentation
 
-> **Version**: 1.4.7 (Dictionary Duo)  
-> **Update Date**: 2026-02-11  
-> **Key Improvements**: Unified popup UI across the main site and PDF reader, added side-by-side dictionary + translation display, and brought the full selection overlay to the VS Code Markdown Preview.
+> **Version**: 1.5.0 (Markdown Reader)
+> **Update Date**: 2026-02-17
+> **Key Improvements**: Added a built-in Markdown viewer to the Chrome extension with full translation parity, sidebar TOC, and scale-based zoom.
 
 ---
 
@@ -37,7 +37,7 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 -   **Concurrency Protection**: Tracks active network requests using `pendingDictionaryRequests` and `pendingTranslationRequests` Maps to prevent redundant API calls for the same text.
 -   **Error Handling**: Validates `Content-Type: application/json` to prevent crashes when APIs return unexpected HTML error pages.
 -   **LRU Cache**: Dual-level caching (Memory + Storage) for dictionary results with a 30-minute TTL.
--   **Smart PDF Redirection**: Optimized regex algorithm to intercept PDF-like navigation and redirect to the custom reader.
+-   **Smart PDF & Markdown Redirection**: Optimized regex algorithms to intercept PDF and Markdown navigation and redirect to the respective custom readers.
 
 ### 3.2 UI Interaction Logic (content.js)
 -   **Secure DOM Construction**: Replaces `innerHTML` with `createElement` chains to natively mitigate XSS risks.
@@ -60,6 +60,17 @@ The project utilizes an **ES Modules (ESM)** architecture to achieve logic reuse
 -   **UI Sync**: The internal PDF translation popup uses the same Shadow DOM technology as the content script for a seamless transition.
 -   **Outline Auto-mapping**: Outline nodes are resolved to page indices once (`resolveOutlinePage`) and cached in `outlineEntries`, enabling automatic highlighting and smooth scrolling of the sidebar as users navigate.
 -   **Zoom Anchor Preservation**: `captureScrollAnchor` records the viewport center before scale changes; `applyScale` re-renders pages and `restoreScrollAnchor` keeps the same content centered after zoom/fit width operations.
+
+---
+
+## 4.5 Markdown Viewer
+
+-   **URL Interception**: `background.js` detects `.md` and `.markdown` URLs via `isMdUrl()` and redirects to `mdviewer.html?url=...`, mirroring the PDF redirection pattern.
+-   **Rendering**: Fetches raw Markdown via `fetch()`, parses with marked.js (`window.marked.parse()`), and injects the resulting HTML into an `<article>` container with GitHub-style typography.
+-   **Relative Path Resolution**: Post-render pass rewrites `img[src]` and `a[href]` attributes from relative to absolute paths based on the original file URL.
+-   **Table of Contents**: Scans rendered `h1`–`h6` elements, assigns stable IDs, and builds a sidebar outline with `scrollIntoView` navigation.
+-   **Zoom**: Uses `transform: scale()` with dynamic `marginBottom` compensation to scale the entire content card uniformly without layout overflow.
+-   **Translation Stack**: Reuses the full Shadow DOM translation pipeline from `utils.js` — dictionary popups, floating buttons, sentence translation, and TTS — with event listeners bound to the Markdown content element.
 
 ---
 

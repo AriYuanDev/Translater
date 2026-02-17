@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Translater - Smart Translation Assistant",
-  "version": "1.4.7",
-  "description": "Double-click for dictionary, select for translation with DeepL support and PDF reader integration.",
+  "version": "1.5.0",
+  "description": "Double-click for dictionary, select for translation with DeepL support, PDF reader and Markdown reader integration.",
   "permissions": [
     "activeTab",
     "webNavigation",
@@ -53,6 +53,10 @@
         "pdfviewer.html",
         "pdfviewer.js",
         "pdfviewer.css",
+        "mdviewer.html",
+        "mdviewer.js",
+        "mdviewer.css",
+        "marked.min.js",
         "styles.css",
         "pdf.min.mjs",
         "pdf.worker.min.mjs",

@@ -3,7 +3,7 @@
     "publisher": "local",
     "displayName": "Translater for VS Code",
     "description": "Port of the Translater Chrome Extension. Supports selection translation.",
-    "version": "1.4.7",
+    "version": "1.5.0",
     "icon": "icon.png",
     "engines": {
         "vscode": "^1.80.0"

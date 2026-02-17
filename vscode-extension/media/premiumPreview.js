@@ -86,10 +86,56 @@
     });
 
     document.addEventListener('mousedown', (e) => {
-        if (!e.target.closest('.premium-float-btn') && !e.target.closest('.premium-popup')) {
+        if (!e.target.closest('.premium-float-btn') && !e.target.closest('.premium-popup') && !e.target.closest('#zoom-toolbar')) {
             removeUI();
         }
     });
+
+    // --- Zoom Controller ---
+    const ZOOM_MIN = 50, ZOOM_MAX = 200, ZOOM_STEP = 10, ZOOM_DEFAULT = 100;
+    const contentEl = document.getElementById('content');
+    const zoomLevelBtn = document.getElementById('zoomLevel');
+    let zoomLevel = ZOOM_DEFAULT;
+
+    function applyZoom(level) {
+        zoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(level / ZOOM_STEP) * ZOOM_STEP));
+        contentEl.style.zoom = zoomLevel / 100;
+        zoomLevelBtn.textContent = zoomLevel + '%';
+        const state = vscode.getState() || {};
+        vscode.setState(Object.assign(state, { zoomLevel }));
+    }
+
+    function calculateFitWidth() {
+        const viewportWidth = window.innerWidth;
+        const contentNaturalWidth = 960 + 120 + 2; // max-width + padding + border
+        return Math.round((viewportWidth / contentNaturalWidth) * 100);
+    }
+
+    document.getElementById('zoomOut').addEventListener('click', () => applyZoom(zoomLevel - ZOOM_STEP));
+    document.getElementById('zoomIn').addEventListener('click', () => applyZoom(zoomLevel + ZOOM_STEP));
+    document.getElementById('zoomReset').addEventListener('click', () => applyZoom(ZOOM_DEFAULT));
+    document.getElementById('fitWidth').addEventListener('click', () => applyZoom(calculateFitWidth()));
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target.closest('#zoom-toolbar')) return;
+        const mod = e.ctrlKey || e.metaKey;
+        if (!mod) return;
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); applyZoom(zoomLevel + ZOOM_STEP); }
+        else if (e.key === '-') { e.preventDefault(); applyZoom(zoomLevel - ZOOM_STEP); }
+        else if (e.key === '0') { e.preventDefault(); applyZoom(ZOOM_DEFAULT); }
+    });
+
+    document.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        applyZoom(zoomLevel + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+    }, { passive: false });
+
+    // Restore persisted zoom level
+    const savedState = vscode.getState();
+    if (savedState && savedState.zoomLevel) {
+        applyZoom(savedState.zoomLevel);
+    }
 
     window.addEventListener('message', event => {
         const message = event.data;

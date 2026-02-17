@@ -239,3 +239,58 @@ body.vscode-high-contrast {
     --color-divider: var(--vscode-focusBorder, #ffffff);
     --color-shadow: 0 0 0 transparent;
 }
+
+/* Zoom Toolbar */
+#zoom-toolbar {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+#zoom-toolbar:hover {
+    opacity: 1;
+}
+
+#zoom-toolbar button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text);
+    cursor: pointer;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    transition: background 0.15s ease;
+}
+
+#zoom-toolbar button:hover {
+    background: var(--color-code-bg);
+}
+
+#zoom-toolbar button:active {
+    opacity: 0.7;
+}
+
+#zoom-toolbar #zoomLevel {
+    width: auto;
+    min-width: 48px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: default;
+}

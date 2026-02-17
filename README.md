@@ -28,6 +28,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 *   **Fully Internationalized**: 100% English interface, error messaging, and documentation.
 *   **DeepL Integration**: Support for both DeepL Free and Pro APIs for superior sentence translation.
 *   **PDF Reader**: Advanced built-in PDF viewer with integrated translation tools, sidebar navigation, and full-screen support.
+*   **Markdown Reader**: Built-in Markdown viewer that intercepts `.md` / `.markdown` URLs, renders them with GitHub-style typography, and provides the same double-click dictionary, selection translation, and TTS features as the PDF reader. Includes a sidebar table of contents and smooth zoom via `transform: scale()`.
 *   **Outline Auto-Sync**: PDF reader sidebar highlights the current page and follows scrolling with anchored zoom behavior.
 
 ### Installation
@@ -72,6 +73,11 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
+### [1.5.0] - 2026-02-17
+*   **Markdown Reader**: New built-in Markdown viewer for the Chrome extension. Navigating to any `.md` or `.markdown` URL automatically redirects to a custom reader with GitHub-flavored rendering (via marked.js), sidebar table of contents generated from headings, and full zoom support using `transform: scale()`.
+*   **Full Translation Parity**: The Markdown reader reuses the same Shadow DOM translation stack as the PDF viewer — double-click dictionary lookup, floating selection menu (Speak / Translate), sentence translation popups, and TTS all work identically.
+*   **Relative Path Resolution**: Images and links using relative paths inside Markdown files are automatically resolved against the original file URL.
+
 ### [1.4.7] - 2026-02-11
 *   **Side-by-Side Definitions**: Double-click popups and the PDF dictionary now show Merriam-Webster definitions alongside DeepL translations with boosted contrast in dark mode.
 *   **VS Code Markdown Preview Translation**: Injected scripts and styles bring the full floating selection menu to Markdown Preview so the editor matches the Chrome interaction model.

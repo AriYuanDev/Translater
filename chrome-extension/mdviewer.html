@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translater Markdown Reader</title>
+    <link rel="stylesheet" href="mdviewer.css">
+    <script src="marked.min.js"></script>
+</head>
+
+<body>
+    <div class="md-toolbar">
+        <div class="toolbar-left">
+            <button id="sidebarToggle" class="toolbar-btn" title="View Contents">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+                </svg>
+            </button>
+        </div>
+        <div class="toolbar-center">
+            <button id="zoomOut" class="toolbar-btn" title="Zoom Out">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 13H5v-2h14v2z" />
+                </svg>
+            </button>
+            <span id="zoomLevel" class="zoom-level">100%</span>
+            <button id="zoomIn" class="toolbar-btn" title="Zoom In">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                </svg>
+            </button>
+        </div>
+        <div class="toolbar-right">
+            <span id="mdTitle" class="md-title">Loading...</span>
+            <button id="openOriginal" class="toolbar-btn" title="Open Original">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">Contents</div>
+        <div id="outlineContainer" class="outline-container">
+            <div class="outline-empty">No headings found</div>
+        </div>
+    </div>
+
+    <div id="viewerContainer" class="viewer-container">
+        <article id="mdContent" class="md-content"></article>
+    </div>
+
+    <script type="module" src="mdviewer.js"></script>
+</body>
+
+</html>

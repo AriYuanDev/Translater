@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The repo hosts two actively maintained surfaces. `chrome-extension/` contains the content scripts, background worker, styles, and PDF assets for the browser build; update `utils.js` first when changing shared popup logic, then propagate to `content.js` and `pdfviewer.js`. `vscode-extension/` houses the Node-based port, with source code under `src/`, packaged media in `media/`, tests in `test/`, and a prebuilt `.vsix` for quick installs. Documentation and reference materials live at the repository root (`README.md`, `TECHNICAL.md`, `TEST_TRANSLATION.md`).
+The repo hosts two actively maintained surfaces. `chrome-extension/` contains the content scripts, background worker, styles, PDF assets, and Markdown viewer for the browser build; update `utils.js` first when changing shared popup logic, then propagate to `content.js`, `pdfviewer.js`, and `mdviewer.js`. `vscode-extension/` houses the Node-based port, with source code under `src/`, packaged media in `media/`, tests in `test/`, and a prebuilt `.vsix` for quick installs. Documentation and reference materials live at the repository root (`README.md`, `TECHNICAL.md`, `TEST_TRANSLATION.md`).
 
 ## Build, Test, and Development Commands
 - `cd vscode-extension && npm install` – install the VS Code extension dependencies.
