@@ -23,7 +23,7 @@ A concise and efficient Chrome translation plugin supporting double-click word t
 ### Features
 *   **Dictionary Lookup**: Instant popup using Merriam-Webster API. Prioritizes professional audio recordings, falling back to high-quality AI TTS.
 *   **Morphed Word Support**: Intelligent recognition of word forms (plurals, past tense). Displays the origin word and provides specific pronunciation for the morphed variant.
-*   **Smart Interactions**: Selected text triggers a premium floating menu. Hover "Translate" for instant meaning, or Click "Speak" for pronunciation (preventing accidental noise).
+*   **Smart Interactions**: Selected text triggers a premium floating menu. Hover "Translate" for instant meaning, Click "Speak" for pronunciation (preventing accidental noise), or Click "Google" to search the selection in a new tab.
 *   **Premium Pro UI**: Sophisticated glassmorphism aesthetic with smooth animations, optimized for clarity and focus.
 *   **Fully Internationalized**: 100% English interface, error messaging, and documentation.
 *   **DeepL Integration**: Support for both DeepL Free and Pro APIs for superior sentence translation.
@@ -73,6 +73,10 @@ You can configure API keys in VS Code Settings:
 | **Security** | 100% Shadow DOM & CSP Friendly | VS Code Configuration |
 
 ## 📝 Changelog
+### [1.5.1] - 2026-02-17
+*   **Google Search Button**: New floating action button on text selection — click the search icon to open a Google search for the selected phrase in a new tab. Available across all surfaces (content pages, PDF reader, Markdown reader).
+*   **Toolbar Centering Fix**: The zoom toolbar in the PDF and Markdown readers is now truly centered by giving `.toolbar-left` and `.toolbar-right` equal flex weight, regardless of their content width.
+
 ### [1.5.0] - 2026-02-17
 *   **Markdown Reader**: New built-in Markdown viewer for the Chrome extension. Navigating to any `.md` or `.markdown` URL automatically redirects to a custom reader with GitHub-flavored rendering (via marked.js), sidebar table of contents generated from headings, and full zoom support using `transform: scale()`.
 *   **Full Translation Parity**: The Markdown reader reuses the same Shadow DOM translation stack as the PDF viewer — double-click dictionary lookup, floating selection menu (Speak / Translate), sentence translation popups, and TTS all work identically.
