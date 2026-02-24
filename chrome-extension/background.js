@@ -128,6 +128,7 @@ function isMdUrl(url) {
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
   if (details.url.includes('pdfviewer.html') || details.url.includes('mdviewer.html')) return;
+  if (details.url.includes('no_redirect')) return; // Allow bypass from "Open Original"
 
   if (isPdfUrl(details.url)) {
     const viewerUrl = chrome.runtime.getURL('pdfviewer.html') + '?url=' + encodeURIComponent(details.url);

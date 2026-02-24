@@ -178,8 +178,17 @@ document.getElementById('sidebarToggle').onclick = () => {
 };
 
 document.getElementById('openOriginal').onclick = () => {
-    const url = getMdUrl();
-    if (url) window.open(url, '_blank');
+    let url = getMdUrl();
+    if (url) {
+        if (!url.includes('#no_redirect')) {
+            url += (url.includes('#') ? '_no_redirect' : '#no_redirect');
+        }
+        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+            chrome.tabs.create({ url: url });
+        } else {
+            window.open(url, '_blank');
+        }
+    }
 };
 
 // ==================== Translation Logic (Shadow DOM) ====================

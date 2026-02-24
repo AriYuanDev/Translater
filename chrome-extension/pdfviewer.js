@@ -440,7 +440,13 @@ async function renderOutline() {
                     outlineEntries.push({ element: div, page: pageNum });
                     div.onclick = () => scrollToPage(pageNum);
                 } else if (item.url) {
-                    div.onclick = () => window.open(item.url, '_blank');
+                    div.onclick = () => {
+                        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+                            chrome.tabs.create({ url: item.url });
+                        } else {
+                            window.open(item.url, '_blank');
+                        }
+                    };
                 }
                 fragment.appendChild(div);
                 if (item.items?.length) fragment.appendChild(await createTree(item.items, level + 1));
@@ -619,7 +625,15 @@ viewer.onmouseup = async (e) => {
             const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onclick = () => speakText(text);
             const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
             const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
-            const gBtn = document.createElement('button'); gBtn.className = 'translator-float-btn google-search-btn'; gBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`; gBtn.setAttribute('data-tooltip', 'Google'); gBtn.onclick = () => window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
+            const gBtn = document.createElement('button'); gBtn.className = 'translator-float-btn google-search-btn'; gBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`; gBtn.setAttribute('data-tooltip', 'Google');
+            gBtn.onclick = () => {
+                const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+                if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+                    chrome.tabs.create({ url: searchUrl });
+                } else {
+                    window.open(searchUrl, '_blank');
+                }
+            };
             floatButtons.append(sBtn, tBtn, cBtn, gBtn);
             floatButtons.style.pointerEvents = 'auto';
             root.appendChild(floatButtons);
