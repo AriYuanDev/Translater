@@ -27,25 +27,20 @@
         sendMessageSafe,
         speakText,
         isContextValid,
-        getURLSafe,
         ensureShadowRoot,
         createCloseButton,
         createSpeakButton,
         removeAllPopups,
-        removeFloatButtons,
         getCurrentPopup,
         setCurrentPopup,
-        getShadowRoot,
-        getHideFloatButtonsTimeout,
-        setHideFloatButtonsTimeout,
-        setCurrentFloatButtons,
-        getCurrentFloatButtons,
         getShadowHost,
         findBestAudioUrl,
-        isProbablyWord
+        isProbablyWord,
+        createDefinitionPair,
+        showSelectionToolbar,
+        showSentencePopup
     } = utils;
 
-    const definitionTranslationCache = new Map();
 
     // Preload speech engine
     if (typeof speechSynthesis !== 'undefined') {
@@ -70,6 +65,7 @@
      */
     async function showPopup(x, y, initialContent) {
         const root = await ensureShadowRoot();
+        if (!root) return null;
         removeAllPopups();
 
         const popup = document.createElement('div');
@@ -133,68 +129,6 @@
         fragment.appendChild(createCloseButton(removeAllPopups));
 
         return fragment;
-    }
-
-    function createDefinitionPair(definitionText) {
-        const trimmed = (definitionText || '').trim();
-        const pair = document.createElement('div');
-        pair.className = 'translator-definition-pair';
-
-        const english = document.createElement('div');
-        english.className = 'translator-definition translator-definition-en';
-        english.textContent = definitionText;
-        pair.appendChild(english);
-
-        const chinese = document.createElement('div');
-        chinese.className = 'translator-definition translator-definition-zh';
-        chinese.textContent = trimmed ? 'Translating…' : '—';
-        chinese.dataset.definitionKey = trimmed;
-        pair.appendChild(chinese);
-
-        if (trimmed) {
-            translateDefinitionToChinese(trimmed, chinese);
-        }
-
-        return pair;
-    }
-
-    function translateDefinitionToChinese(text, targetEl) {
-        const translationPromise = getDefinitionTranslationPromise(text);
-        translationPromise.then(result => {
-            if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
-            if (result && result.success && result.data && result.data.translated) {
-                targetEl.textContent = result.data.translated;
-                targetEl.classList.remove('translator-definition-zh-error');
-            } else {
-                const localizedError = (result && result.error === 'Please configure DeepL API Key')
-                    ? 'Please configure a DeepL API Key in extension options'
-                    : (result && result.error) || 'Translation unavailable';
-                targetEl.textContent = localizedError;
-                targetEl.classList.add('translator-definition-zh-error');
-            }
-        }).catch(() => {
-            if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
-            targetEl.textContent = 'Translation failed';
-            targetEl.classList.add('translator-definition-zh-error');
-        });
-    }
-
-    function getDefinitionTranslationPromise(text) {
-        if (definitionTranslationCache.has(text)) {
-            return definitionTranslationCache.get(text);
-        }
-
-        const promise = sendMessageSafe({
-            action: 'translate',
-            text,
-            targetLang: 'zh-CN'
-        }).then(response => {
-            if (response) return response;
-            return { success: false, error: 'Translation unavailable' };
-        }).catch(error => ({ success: false, error: error?.message || 'Translation failed' }));
-
-        definitionTranslationCache.set(text, promise);
-        return promise;
     }
 
     /**
@@ -332,14 +266,14 @@
 
         if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
 
-        await showPopup(e.clientX, e.clientY, createLoadingPopup(word));
+        const popup = await showPopup(e.clientX, e.clientY, createLoadingPopup(word));
 
         const response = await sendMessageSafe({
             action: 'fetchDictionary',
             word: word.toLowerCase()
         });
 
-        if (!isContextValid() || !getCurrentPopup()) return;
+        if (!isContextValid() || getCurrentPopup() !== popup) return;
 
         if (response && response.success && response.data) {
             updatePopupWithData(response.data, word);
@@ -361,7 +295,7 @@
             updatePopupWithError(word, response.error);
         } else {
             const trRes = await sendMessageSafe({ action: 'translate', text: word });
-            if (!isContextValid() || !getCurrentPopup()) return;
+            if (!isContextValid() || getCurrentPopup() !== popup) return;
             if (trRes && trRes.success && trRes.data) {
                 const container = getCurrentPopup().querySelector('.translator-meanings');
                 if (container) {
@@ -389,72 +323,13 @@
                 const text = selection.toString().trim();
 
                 if (e.target.id === 'translator-extension-host') return;
-                removeFloatButtons();
-
                 if (!text || !isAllEnglish(text) || isProbablyWord(text)) return;
 
-                const root = await ensureShadowRoot();
-                const floatButtons = document.createElement('div');
-                floatButtons.className = 'translator-float-buttons';
-
-                // Constants for floating buttons
-                const FLOAT_BTN_WIDTH = 32;
-                const FLOAT_BTN_GAP = 30;
-
-                const speakBtn = document.createElement('button');
-                speakBtn.className = 'translator-float-btn speak-btn';
-                speakBtn.innerHTML = createSpeakerSVG();
-                speakBtn.setAttribute('data-tooltip', 'Speak');
-                speakBtn.onclick = () => speakText(text);
-
-                const transBtn = document.createElement('button');
-                transBtn.className = 'translator-float-btn translate-btn';
-                transBtn.textContent = 'T';
-                transBtn.setAttribute('data-tooltip', 'Translate');
-                transBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
-
-                const closeBtn = document.createElement('button');
-                closeBtn.className = 'translator-float-btn close-floating-btn';
-                closeBtn.textContent = '×';
-                closeBtn.setAttribute('data-tooltip', 'Close');
-                closeBtn.onclick = removeFloatButtons;
-                closeBtn.onmouseenter = removeFloatButtons;
-
-                const googleBtn = document.createElement('button');
-                googleBtn.className = 'translator-float-btn google-search-btn';
-                googleBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`;
-                googleBtn.setAttribute('data-tooltip', 'Google');
-                googleBtn.onclick = () => {
-                    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
-                    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
-                        chrome.tabs.create({ url: searchUrl });
-                    } else {
-                        window.open(searchUrl, '_blank');
-                    }
-                };
-
-                floatButtons.appendChild(speakBtn);
-                floatButtons.appendChild(transBtn);
-                floatButtons.appendChild(closeBtn);
-                floatButtons.appendChild(googleBtn);
-                floatButtons.style.pointerEvents = 'auto';
-                root.appendChild(floatButtons);
-                setCurrentFloatButtons(floatButtons);
-
-                // Position
-                const containerWidth = FLOAT_BTN_WIDTH * 3 + FLOAT_BTN_GAP + 6;
-                let left = Math.max(10, Math.min(e.clientX - FLOAT_BTN_WIDTH - FLOAT_BTN_GAP / 2, window.innerWidth - containerWidth - 10));
-                let top = Math.max(44, Math.min(e.clientY - FLOAT_BTN_WIDTH / 2, window.innerHeight - FLOAT_BTN_WIDTH - 44));
-
-                floatButtons.style.left = left + 'px';
-                floatButtons.style.top = top + 'px';
-                floatButtons.style.gap = FLOAT_BTN_GAP + 'px';
-
-                floatButtons.addEventListener('mouseleave', () => {
-                    setHideFloatButtonsTimeout(setTimeout(removeFloatButtons, 500));
-                });
-                floatButtons.addEventListener('mouseenter', () => {
-                    if (getHideFloatButtonsTimeout()) clearTimeout(getHideFloatButtonsTimeout());
+                await showSelectionToolbar({
+                    text,
+                    x: e.clientX,
+                    y: e.clientY,
+                    onTranslate: translateSelection
                 });
             } catch (err) {
                 console.error('[Translater] Mouseup event failed:', err);
@@ -469,38 +344,11 @@
      * @param {number} y - Viewport Y coordinate.
      */
     async function translateSelection(text, x, y) {
-        removeAllPopups();
-        const root = await ensureShadowRoot();
-
-        const popup = document.createElement('div');
-        popup.className = 'translator-sentence-popup';
-        popup.style.pointerEvents = 'auto';
-
-        const closeBtn = createCloseButton(removeAllPopups);
-        const content = document.createElement('div');
-        content.className = 'translator-sentence-content';
-        const loading = document.createElement('div');
-        loading.className = 'translator-loading';
-        loading.textContent = 'Translating...';
-        content.appendChild(loading);
-
-        popup.appendChild(content);
-        popup.appendChild(closeBtn); // Append button last
-        root.appendChild(popup);
-        setCurrentPopup(popup);
-
-        const sentenceWidth = Math.min(420, window.innerWidth - 20);
-        const pos = calculatePopupPosition(x, y, sentenceWidth, 180, {
-            preferBelow: true,
-            alignCenter: true,
-            anchorX: x,
-            anchorY: y
-        });
-        popup.style.left = pos.left + 'px';
-        popup.style.top = pos.top + 'px';
+        const { popup, content } = await showSentencePopup(x, y);
+        if (!popup || !content) return;
 
         const response = await sendMessageSafe({ action: 'translate', text });
-        if (!isContextValid()) return;
+        if (!isContextValid() || getCurrentPopup() !== popup) return;
         if (response && response.success && response.data) {
             content.innerHTML = '';
             const res = document.createElement('div');

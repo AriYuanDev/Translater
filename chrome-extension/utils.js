@@ -76,6 +76,40 @@ export function getURLSafe(path) {
     }
 }
 
+/**
+ * Opens an external URL using the best available extension context.
+ * @param {string} url
+ */
+export function openExternalUrl(url) {
+    if (!url) return;
+    if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.create === 'function') {
+        chrome.tabs.create({ url });
+        return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/**
+ * Adds a no-redirect flag to a URL so the background script can bypass custom viewers.
+ * @param {string} url
+ * @param {string} [paramName='translater_no_redirect']
+ * @returns {string}
+ */
+export function appendNoRedirectParam(url, paramName = 'translater_no_redirect') {
+    if (!url) return '';
+    try {
+        const parsedUrl = new URL(url);
+        parsedUrl.searchParams.set(paramName, '1');
+        return parsedUrl.toString();
+    } catch {
+        if (url.includes(`${paramName}=`)) {
+            return url;
+        }
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}${paramName}=1`;
+    }
+}
+
 // Calculate popup position
 /**
  * Calculates the optimal position for a popup element relative to click coordinates.
@@ -185,26 +219,124 @@ export async function sendMessageSafe(message, timeoutMs = 15000) {
     }
 }
 
+const definitionTranslationCache = new Map();
+
+/**
+ * Retrieves or creates a cached translation request for a dictionary definition.
+ * @param {string} text
+ * @returns {Promise<Object>}
+ */
+export function getDefinitionTranslationPromise(text) {
+    if (definitionTranslationCache.has(text)) {
+        return definitionTranslationCache.get(text);
+    }
+
+    const promise = sendMessageSafe({
+        action: 'translate',
+        text,
+        targetLang: 'zh-CN'
+    }).then(response => {
+        if (response) return response;
+        return { success: false, error: 'Translation unavailable' };
+    }).catch(error => ({ success: false, error: error?.message || 'Translation failed' }));
+
+    definitionTranslationCache.set(text, promise);
+    return promise;
+}
+
+/**
+ * Creates a paired English/Chinese definition block with lazy translation.
+ * @param {string} definitionText
+ * @returns {HTMLDivElement}
+ */
+export function createDefinitionPair(definitionText) {
+    const trimmed = (definitionText || '').trim();
+    const pair = document.createElement('div');
+    pair.className = 'translator-definition-pair';
+
+    const english = document.createElement('div');
+    english.className = 'translator-definition translator-definition-en';
+    english.textContent = definitionText || '—';
+    pair.appendChild(english);
+
+    const chinese = document.createElement('div');
+    chinese.className = 'translator-definition translator-definition-zh';
+    chinese.textContent = trimmed ? 'Translating…' : '—';
+    chinese.dataset.definitionKey = trimmed;
+    pair.appendChild(chinese);
+
+    if (trimmed) {
+        getDefinitionTranslationPromise(trimmed).then(result => {
+            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+            if (result && result.success && result.data && result.data.translated) {
+                chinese.textContent = result.data.translated;
+                chinese.classList.remove('translator-definition-zh-error');
+            } else {
+                const localizedError = (result && result.error === 'Please configure DeepL API Key')
+                    ? 'Please configure a DeepL API Key in extension options'
+                    : (result && result.error) || 'Translation unavailable';
+                chinese.textContent = localizedError;
+                chinese.classList.add('translator-definition-zh-error');
+            }
+        }).catch(() => {
+            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+            chinese.textContent = 'Translation failed';
+            chinese.classList.add('translator-definition-zh-error');
+        });
+    }
+
+    return pair;
+}
+
 // Ensure speech voices are loaded with timeout protection
 function waitForVoices(timeoutMs = 3000) {
     return new Promise((resolve) => {
-        const voices = window.speechSynthesis.getVoices();
+        const speechApi = window.speechSynthesis;
+        const voices = speechApi.getVoices();
         if (voices.length > 0) {
             resolve(voices);
             return;
         }
-        const timeoutId = setTimeout(() => {
-            window.speechSynthesis.onvoiceschanged = null;
-            resolve(window.speechSynthesis.getVoices()); // Return whatever is available
-        }, timeoutMs);
-        const handler = () => {
-            clearTimeout(timeoutId);
-            window.speechSynthesis.onvoiceschanged = null;
-            resolve(window.speechSynthesis.getVoices());
+
+        let settled = false;
+        let timeoutId = null;
+
+        const cleanup = () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+            if (typeof speechApi.removeEventListener === 'function') {
+                speechApi.removeEventListener('voiceschanged', handler);
+            }
         };
-        window.speechSynthesis.onvoiceschanged = handler;
-        // Some browsers need an explicit call to getVoices to trigger the event
-        window.speechSynthesis.getVoices();
+
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(speechApi.getVoices());
+        };
+
+        const handler = () => {
+            finish();
+        };
+
+        timeoutId = setTimeout(finish, timeoutMs);
+
+        if (typeof speechApi.addEventListener === 'function') {
+            speechApi.addEventListener('voiceschanged', handler);
+        } else {
+            const previousHandler = speechApi.onvoiceschanged;
+            speechApi.onvoiceschanged = (event) => {
+                if (typeof previousHandler === 'function') {
+                    previousHandler.call(speechApi, event);
+                }
+                finish();
+            };
+        }
+
+        speechApi.getVoices();
     });
 }
 
@@ -354,6 +486,121 @@ export function createSpeakButton(onClick) {
         });
     }
     return btn;
+}
+
+/**
+ * Creates and shows a sentence translation popup with loading content.
+ * @param {number} x
+ * @param {number} y
+ * @param {{width?: number, height?: number, loadingText?: string}} [options]
+ * @returns {Promise<{popup: HTMLElement|null, content: HTMLElement|null}>}
+ */
+export async function showSentencePopup(x, y, options = {}) {
+    removeAllPopups();
+    const root = await ensureShadowRoot();
+    if (!root) {
+        return { popup: null, content: null };
+    }
+
+    const {
+        width = Math.min(420, window.innerWidth - 20),
+        height = 180,
+        loadingText = 'Translating...'
+    } = options;
+
+    const popup = document.createElement('div');
+    popup.className = 'translator-sentence-popup';
+    popup.style.pointerEvents = 'auto';
+
+    const content = document.createElement('div');
+    content.className = 'translator-sentence-content';
+    const loading = document.createElement('div');
+    loading.className = 'translator-loading';
+    loading.textContent = loadingText;
+    content.appendChild(loading);
+
+    popup.appendChild(content);
+    popup.appendChild(createCloseButton(removeAllPopups));
+    root.appendChild(popup);
+    setCurrentPopup(popup);
+
+    const pos = calculatePopupPosition(x, y, width, height, {
+        preferBelow: true,
+        alignCenter: true,
+        anchorX: x,
+        anchorY: y
+    });
+    popup.style.left = pos.left + 'px';
+    popup.style.top = pos.top + 'px';
+
+    return { popup, content };
+}
+
+/**
+ * Shows the shared floating selection toolbar.
+ * @param {{text: string, x: number, y: number, onTranslate: Function, minTop?: number}} options
+ * @returns {Promise<HTMLElement|null>}
+ */
+export async function showSelectionToolbar(options) {
+    const { text, x, y, onTranslate, minTop = 44 } = options;
+    removeFloatButtons();
+
+    const root = await ensureShadowRoot();
+    if (!root) return null;
+
+    const buttonWidth = 32;
+    const buttonGap = 30;
+    const floatButtons = document.createElement('div');
+    floatButtons.className = 'translator-float-buttons';
+    floatButtons.style.pointerEvents = 'auto';
+
+    const speakBtn = document.createElement('button');
+    speakBtn.className = 'translator-float-btn speak-btn';
+    speakBtn.innerHTML = createSpeakerSVG();
+    speakBtn.setAttribute('data-tooltip', 'Speak');
+    speakBtn.onclick = () => speakText(text);
+
+    const transBtn = document.createElement('button');
+    transBtn.className = 'translator-float-btn translate-btn';
+    transBtn.textContent = 'T';
+    transBtn.setAttribute('data-tooltip', 'Translate');
+    transBtn.onmouseenter = () => onTranslate(text, x, y);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'translator-float-btn close-floating-btn';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('data-tooltip', 'Close');
+    closeBtn.onclick = removeFloatButtons;
+    closeBtn.onmouseenter = removeFloatButtons;
+
+    const googleBtn = document.createElement('button');
+    googleBtn.className = 'translator-float-btn google-search-btn';
+    googleBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`;
+    googleBtn.setAttribute('data-tooltip', 'Google');
+    googleBtn.onclick = () => {
+        openExternalUrl(`https://www.google.com/search?q=${encodeURIComponent(text)}`);
+    };
+
+    floatButtons.append(speakBtn, transBtn, closeBtn, googleBtn);
+    root.appendChild(floatButtons);
+    setCurrentFloatButtons(floatButtons);
+
+    const containerWidth = buttonWidth * 3 + buttonGap + 6;
+    const left = Math.max(10, Math.min(x - buttonWidth - buttonGap / 2, window.innerWidth - containerWidth - 10));
+    const top = Math.max(minTop, Math.min(y - buttonWidth / 2, window.innerHeight - buttonWidth - minTop));
+
+    floatButtons.style.left = left + 'px';
+    floatButtons.style.top = top + 'px';
+    floatButtons.style.gap = buttonGap + 'px';
+
+    floatButtons.addEventListener('mouseleave', () => {
+        setHideFloatButtonsTimeout(setTimeout(removeFloatButtons, 500));
+    });
+    floatButtons.addEventListener('mouseenter', () => {
+        if (getHideFloatButtonsTimeout()) clearTimeout(getHideFloatButtonsTimeout());
+    });
+
+    return floatButtons;
 }
 
 /**

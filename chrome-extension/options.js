@@ -1,6 +1,27 @@
 import { sendMessageSafe } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    const REQUEST_TIMEOUT_MS = 15000;
+
+    async function fetchWithTimeout(resource, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            return await fetch(resource, {
+                ...options,
+                signal: controller.signal
+            });
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('Request timed out');
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
     // DeepL elements
     const apiKeyInput = document.getElementById('apiKey');
     const saveBtn = document.getElementById('saveBtn');
@@ -181,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const baseUrl = isPro ? 'https://api.deepl.com/v2/usage' : 'https://api-free.deepl.com/v2/usage';
 
         try {
-            const response = await fetch(baseUrl, {
+            const response = await fetchWithTimeout(baseUrl, {
                 headers: { 'Authorization': `DeepL-Auth-Key ${apiKey}` }
             });
 
@@ -202,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function testMWApiKey(apiKey) {
         try {
             // Test with a simple word
-            const response = await fetch(`https://www.dictionaryapi.com/api/v3/references/learners/json/test?key=${apiKey}`);
+            const response = await fetchWithTimeout(`https://www.dictionaryapi.com/api/v3/references/learners/json/test?key=${apiKey}`);
 
             const contentType = response.headers.get('content-type');
             if (response.ok && contentType && contentType.includes('application/json')) {

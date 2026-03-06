@@ -70,6 +70,26 @@ function saveDictionaryCache() {
 // Tracking active requests (prevent concurrent duplicate requests)
 const pendingDictionaryRequests = new Map();
 const pendingTranslationRequests = new Map();
+const REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(resource, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 // API Key memory cache
 let cachedMWApiKey = null;
@@ -124,18 +144,30 @@ function isMdUrl(url) {
   }
 }
 
+function hasViewerBypass(url) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    return urlObj.searchParams.has('translater_no_redirect') || urlObj.hash.includes('no_redirect');
+  } catch {
+    return url.includes('no_redirect');
+  }
+}
+
+function createViewerUrl(viewerPage, sourceUrl) {
+  return chrome.runtime.getURL(viewerPage) + '?url=' + encodeURIComponent(sourceUrl);
+}
+
 // Monitor navigation to detect and redirect PDFs and Markdown files
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
   if (details.url.includes('pdfviewer.html') || details.url.includes('mdviewer.html')) return;
-  if (details.url.includes('no_redirect')) return; // Allow bypass from "Open Original"
+  if (hasViewerBypass(details.url)) return;
 
   if (isPdfUrl(details.url)) {
-    const viewerUrl = chrome.runtime.getURL('pdfviewer.html') + '?url=' + encodeURIComponent(details.url);
-    chrome.tabs.update(details.tabId, { url: viewerUrl });
+    chrome.tabs.update(details.tabId, { url: createViewerUrl('pdfviewer.html', details.url) });
   } else if (isMdUrl(details.url)) {
-    const viewerUrl = chrome.runtime.getURL('mdviewer.html') + '?url=' + encodeURIComponent(details.url);
-    chrome.tabs.update(details.tabId, { url: viewerUrl });
+    chrome.tabs.update(details.tabId, { url: createViewerUrl('mdviewer.html', details.url) });
   }
 });
 
@@ -388,7 +420,7 @@ async function fetchDictionary(word) {
 
       console.log(`[MW API] Query: ${normalizedWord}`);
 
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
 
       if (!response.ok) {
         if (response.status === 403) {
@@ -492,7 +524,7 @@ async function translateWithDeepL(text, targetLang, apiKey) {
   const isPro = !apiKey.endsWith(':fx');
   const baseUrl = isPro ? 'https://api.deepl.com/v2/translate' : 'https://api-free.deepl.com/v2/translate';
 
-  const response = await fetch(baseUrl, {
+  const response = await fetchWithTimeout(baseUrl, {
     method: 'POST',
     headers: {
       'Authorization': `DeepL-Auth-Key ${apiKey}`,

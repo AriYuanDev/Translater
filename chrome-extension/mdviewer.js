@@ -19,24 +19,25 @@ if (!utils) {
 const {
     escapeHtml,
     isAllEnglish,
+    isProbablyWord,
     createSpeakerSVG,
     calculatePopupPosition,
     sendMessageSafe,
     speakText,
-    getURLSafe,
     isContextValid,
     ensureShadowRoot,
     createCloseButton,
     createSpeakButton,
     removeAllPopups,
-    removeFloatButtons,
     getCurrentPopup,
     setCurrentPopup,
-    setCurrentFloatButtons,
-    getHideFloatButtonsTimeout,
-    setHideFloatButtonsTimeout,
     findBestAudioUrl,
-    getShadowHost
+    getShadowHost,
+    createDefinitionPair,
+    showSelectionToolbar,
+    showSentencePopup,
+    openExternalUrl,
+    appendNoRedirectParam
 } = utils;
 
 // DOM Elements
@@ -52,15 +53,12 @@ const POPUP_WIDTH = 760;
 const POPUP_HEIGHT = 260;
 const SENTENCE_POPUP_WIDTH = 420;
 const SENTENCE_POPUP_HEIGHT = 180;
-const FLOAT_BTN_WIDTH = 32;
-const FLOAT_BTN_GAP = 30;
 
 const MIN_ZOOM = 60;
 const MAX_ZOOM = 200;
 const ZOOM_STEP = 10;
 let currentZoom = 100;
 
-const definitionTranslationCache = new Map();
 
 // ==================== Markdown Loading and Rendering ====================
 
@@ -68,16 +66,46 @@ function getMdUrl() {
     return new URLSearchParams(window.location.search).get('url');
 }
 
+function isFileUrl(url) {
+    return typeof url === 'string' && url.startsWith('file://');
+}
+
+function sanitizeMarkdownHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+
+    template.content.querySelectorAll('script, iframe, object, embed, link, meta, style, base, form').forEach(node => {
+        node.remove();
+    });
+
+    template.content.querySelectorAll('*').forEach(element => {
+        Array.from(element.attributes).forEach(attribute => {
+            const name = attribute.name.toLowerCase();
+            const value = attribute.value.trim();
+            if (name.startsWith('on') || name === 'srcdoc') {
+                element.removeAttribute(attribute.name);
+                return;
+            }
+            if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'formaction') && /^javascript:/i.test(value)) {
+                element.removeAttribute(attribute.name);
+            }
+        });
+    });
+
+    return template.innerHTML;
+}
+
 async function loadMarkdown(url) {
     try {
         showLoading(true);
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const isReadableFileResponse = isFileUrl(url) && response.status === 0;
+        if (!response.ok && !isReadableFileResponse) throw new Error(`HTTP ${response.status}`);
         const rawText = await response.text();
 
         // Parse markdown
         const html = window.marked.parse(rawText);
-        mdContent.innerHTML = html;
+        mdContent.innerHTML = sanitizeMarkdownHtml(html);
 
         // Fix relative paths
         const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
@@ -178,89 +206,21 @@ document.getElementById('sidebarToggle').onclick = () => {
 };
 
 document.getElementById('openOriginal').onclick = () => {
-    let url = getMdUrl();
+    const url = getMdUrl();
     if (url) {
-        if (!url.includes('#no_redirect')) {
-            url += (url.includes('#') ? '_no_redirect' : '#no_redirect');
-        }
-        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
-            chrome.tabs.create({ url: url });
-        } else {
-            window.open(url, '_blank');
-        }
+        openExternalUrl(appendNoRedirectParam(url));
     }
 };
 
 // ==================== Translation Logic (Shadow DOM) ====================
 
-function createDefinitionPair(definitionText) {
-    const trimmed = (definitionText || '').trim();
-    const pair = document.createElement('div');
-    pair.className = 'translator-definition-pair';
-
-    const english = document.createElement('div');
-    english.className = 'translator-definition translator-definition-en';
-    english.textContent = definitionText || '—';
-    pair.appendChild(english);
-
-    const chinese = document.createElement('div');
-    chinese.className = 'translator-definition translator-definition-zh';
-    chinese.textContent = trimmed ? 'Translating…' : '—';
-    chinese.dataset.definitionKey = trimmed;
-    pair.appendChild(chinese);
-
-    if (trimmed) {
-        translateDefinitionToChinese(trimmed, chinese);
-    }
-
-    return pair;
-}
-
-function translateDefinitionToChinese(text, targetEl) {
-    const translationPromise = getDefinitionTranslationPromise(text);
-    translationPromise.then(result => {
-        if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
-        if (result && result.success && result.data && result.data.translated) {
-            targetEl.textContent = result.data.translated;
-            targetEl.classList.remove('translator-definition-zh-error');
-        } else {
-            const localizedError = (result && result.error === 'Please configure DeepL API Key')
-                ? 'Please configure a DeepL API Key in extension options'
-                : (result && result.error) || 'Translation unavailable';
-            targetEl.textContent = localizedError;
-            targetEl.classList.add('translator-definition-zh-error');
-        }
-    }).catch(() => {
-        if (!targetEl.isConnected || targetEl.dataset.definitionKey !== text) return;
-        targetEl.textContent = 'Translation failed';
-        targetEl.classList.add('translator-definition-zh-error');
-    });
-}
-
-function getDefinitionTranslationPromise(text) {
-    if (definitionTranslationCache.has(text)) {
-        return definitionTranslationCache.get(text);
-    }
-
-    const promise = sendMessageSafe({
-        action: 'translate',
-        text,
-        targetLang: 'zh-CN'
-    }).then(response => {
-        if (response) return response;
-        return { success: false, error: 'Translation unavailable' };
-    }).catch(error => ({ success: false, error: error?.message || 'Translation failed' }));
-
-    definitionTranslationCache.set(text, promise);
-    return promise;
-}
-
 mdContent.addEventListener('dblclick', async (e) => {
     if (!isContextValid()) return;
     const word = window.getSelection().toString().trim();
-    if (!word || !isAllEnglish(word)) return;
+    if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
 
     const root = await ensureShadowRoot();
+    if (!root) return;
     removeAllPopups();
     const popup = document.createElement('div');
     popup.className = 'translator-popup';
@@ -285,6 +245,7 @@ mdContent.addEventListener('dblclick', async (e) => {
     popup.appendChild(createCloseButton(removeAllPopups));
     root.appendChild(popup);
     setCurrentPopup(popup);
+    const activePopup = popup;
 
     const width = Math.min(POPUP_WIDTH, window.innerWidth - 20);
     const pos = calculatePopupPosition(e.clientX, e.clientY, width, POPUP_HEIGHT, {
@@ -294,7 +255,7 @@ mdContent.addEventListener('dblclick', async (e) => {
     popup.style.top = pos.top + 'px';
 
     const response = await sendMessageSafe({ action: 'fetchDictionary', word: word.toLowerCase() });
-    if (!isContextValid() || !getCurrentPopup()) return;
+    if (!isContextValid() || getCurrentPopup() !== activePopup) return;
     if (response && response.success && response.data) {
         updatePopupWithData(response.data, word);
         const isMorphed = response.data.word && response.data.word.toLowerCase() !== word.toLowerCase();
@@ -310,7 +271,7 @@ mdContent.addEventListener('dblclick', async (e) => {
         meanings.appendChild(err);
     } else {
         const tr = await sendMessageSafe({ action: 'translate', text: word });
-        if (!isContextValid() || !getCurrentPopup()) return;
+        if (!isContextValid() || getCurrentPopup() !== activePopup) return;
         meanings.innerHTML = '';
         if (tr && tr.success && tr.data) {
             const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || 'No results';
@@ -379,26 +340,14 @@ mdContent.onmouseup = async (e) => {
         try {
             const text = window.getSelection().toString().trim();
             if (e.target.id === 'translator-extension-host') return;
-            removeFloatButtons();
-            if (!text || (text.split(/\s+/).length === 1 && /^[a-zA-Z]+$/.test(text)) || !isAllEnglish(text)) return;
-            const root = await ensureShadowRoot();
-            const floatButtons = document.createElement('div');
-            floatButtons.className = 'translator-float-buttons';
-            const sBtn = document.createElement('button'); sBtn.className = 'translator-float-btn speak-btn'; sBtn.innerHTML = createSpeakerSVG(); sBtn.setAttribute('data-tooltip', 'Speak'); sBtn.onclick = () => speakText(text);
-            const tBtn = document.createElement('button'); tBtn.className = 'translator-float-btn translate-btn'; tBtn.textContent = 'T'; tBtn.setAttribute('data-tooltip', 'Translate'); tBtn.onmouseenter = () => translateSelection(text, e.clientX, e.clientY);
-            const cBtn = document.createElement('button'); cBtn.className = 'translator-float-btn close-floating-btn'; cBtn.textContent = '×'; cBtn.onmouseenter = removeFloatButtons;
-            const gBtn = document.createElement('button'); gBtn.className = 'translator-float-btn google-search-btn'; gBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`; gBtn.setAttribute('data-tooltip', 'Google'); gBtn.onclick = () => window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
-            floatButtons.append(sBtn, tBtn, cBtn, gBtn);
-            floatButtons.style.pointerEvents = 'auto';
-            root.appendChild(floatButtons);
-            setCurrentFloatButtons(floatButtons);
-
-            const contW = FLOAT_BTN_WIDTH * 3 + FLOAT_BTN_GAP + 6;
-            let left = Math.max(10, Math.min(e.clientX - FLOAT_BTN_WIDTH - FLOAT_BTN_GAP / 2, window.innerWidth - contW - 10));
-            let top = Math.max(60, Math.min(e.clientY - FLOAT_BTN_WIDTH / 2, window.innerHeight - FLOAT_BTN_WIDTH - 44));
-            floatButtons.style.left = left + 'px'; floatButtons.style.top = top + 'px'; floatButtons.style.gap = FLOAT_BTN_GAP + 'px';
-            floatButtons.onmouseleave = () => { setHideFloatButtonsTimeout(setTimeout(removeFloatButtons, 500)); };
-            floatButtons.onmouseenter = () => { if (getHideFloatButtonsTimeout()) clearTimeout(getHideFloatButtonsTimeout()); };
+            if (!text || !isAllEnglish(text) || isProbablyWord(text)) return;
+            await showSelectionToolbar({
+                text,
+                x: e.clientX,
+                y: e.clientY,
+                minTop: 60,
+                onTranslate: translateSelection
+            });
         } catch (err) {
             console.error('[Translater] Mouseup error:', err);
         }
@@ -406,31 +355,14 @@ mdContent.onmouseup = async (e) => {
 };
 
 async function translateSelection(text, x, y) {
-    removeAllPopups();
-    const root = await ensureShadowRoot();
-    const popup = document.createElement('div');
-    popup.className = 'translator-sentence-popup';
-    const content = document.createElement('div');
-    content.className = 'translator-sentence-content';
-    const loading = document.createElement('div');
-    loading.className = 'translator-loading';
-    loading.textContent = 'Translating...';
-    content.appendChild(loading);
-    popup.appendChild(content);
-    popup.appendChild(createCloseButton(removeAllPopups));
-    popup.style.pointerEvents = 'auto';
-    root.appendChild(popup);
-    setCurrentPopup(popup);
-
-    const width = Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20);
-    const pos = calculatePopupPosition(x, y, width, SENTENCE_POPUP_HEIGHT, {
-        preferBelow: true, alignCenter: true, anchorX: x, anchorY: y
+    const { popup, content } = await showSentencePopup(x, y, {
+        width: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
+        height: SENTENCE_POPUP_HEIGHT
     });
-    popup.style.left = pos.left + 'px';
-    popup.style.top = pos.top + 'px';
+    if (!popup || !content) return;
 
     const response = await sendMessageSafe({ action: 'translate', text });
-    if (!isContextValid()) return;
+    if (!isContextValid() || getCurrentPopup() !== popup) return;
     if (response && response.success && response.data) {
         content.innerHTML = '';
         const res = document.createElement('div');
@@ -442,7 +374,7 @@ async function translateSelection(text, x, y) {
     }
 }
 
-document.onmousedown = (e) => {
+document.addEventListener('mousedown', (e) => {
     const path = e.composedPath();
     const isClickInside = path.some(el =>
         el === getShadowHost() ||
@@ -450,7 +382,7 @@ document.onmousedown = (e) => {
     );
     if (!isClickInside && getCurrentPopup()) removeAllPopups();
     if (!isContextValid()) return;
-};
+});
 
 // ==================== Loading / Error UI ====================
 

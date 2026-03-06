@@ -1,23 +1,32 @@
-# Translation Test Document
+# Chrome Extension Smoke Test Checklist
 
-This document is designed to test the **Translater for VS Code** extension.
+## Setup
 
-## Test Case 1: Double-Click Translation
-Double-click the following word to see if a translation popup appears:
-- **Metamorphosis**
+1. Load `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension` in `chrome://extensions`
+2. Enable **Allow access to file URLs** if you want to test local Markdown/PDF files
+3. Configure DeepL and Merriam-Webster keys in the options page
 
-## Test Case 2: Selection Translation
-Select the following sentence to trigger the floating "T" button:
-- *The quick brown fox jumps over the lazy dog.*
+## Web Page Tests
 
-## Test Case 3: Complex Formatting
-Select text within a code block:
-```js
-console.log("Hello World");
-```
+- Double-click `metamorphosis` on an English page and confirm the dictionary popup appears
+- Double-click an obvious non-word like `...` or `1234` and confirm no dictionary popup appears
+- Select `The quick brown fox jumps over the lazy dog.` and confirm the floating toolbar appears
+- Hover `T` and confirm the translation popup renders
+- Click the speaker button and confirm TTS works
+- Click the Google button and confirm the search opens in a new tab
 
-## Troubleshooting
-If clicking the "T" button does nothing or turns the page blank:
-1. Ensure the DeepL API Key is set in Settings.
-2. Run `Developer: Reload Window`.
-3. Check if the "T" button stays in place without jumping.
+## Markdown Viewer Tests
+
+- Open a local or remote `.md` file and confirm the custom viewer loads
+- Confirm headings appear in the sidebar TOC
+- Confirm inline HTML with scripts/events is not executed
+- Confirm relative links and images resolve correctly
+- Click **Open Original** and confirm the original file opens without being redirected back into the custom viewer
+
+## PDF Viewer Tests
+
+- Open a local or remote `.pdf` file and confirm the custom viewer loads
+- Confirm the outline sidebar works when the PDF has bookmarks
+- Confirm zoom in / zoom out / fit width work without losing the current reading position
+- Double-click a word on the PDF text layer and confirm the dictionary popup appears
+- Select a sentence on the PDF and confirm the floating toolbar and translation popup work
