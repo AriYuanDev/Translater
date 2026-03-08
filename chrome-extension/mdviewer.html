@@ -12,7 +12,7 @@
 <body>
     <div class="md-toolbar">
         <div class="toolbar-left">
-            <button id="sidebarToggle" class="toolbar-btn" title="View Contents">
+            <button id="sidebarToggle" class="toolbar-btn" title="Browse Sidebar">
                 <svg viewBox="0 0 24 24">
                     <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
                 </svg>
@@ -43,9 +43,26 @@
 
     <!-- Sidebar -->
     <div id="sidebar" class="sidebar">
-        <div class="sidebar-header">Contents</div>
-        <div id="outlineContainer" class="outline-container">
-            <div class="outline-empty">No headings found</div>
+        <div class="sidebar-tabs">
+            <button type="button" class="sidebar-tab active" data-sidebar-panel="files">Files</button>
+            <button type="button" class="sidebar-tab" data-sidebar-panel="contents">Contents</button>
+        </div>
+        <div class="sidebar-panel active" data-panel="files">
+            <div class="sidebar-panel-header">
+                <div class="sidebar-panel-title">Files</div>
+                <div id="sidebarFolderName" class="sidebar-panel-subtitle">Current Folder</div>
+            </div>
+            <div id="fileBrowserContainer" class="file-browser-container">
+                <div class="sidebar-empty">Loading sibling documents...</div>
+            </div>
+        </div>
+        <div class="sidebar-panel" data-panel="contents">
+            <div class="sidebar-panel-header">
+                <div class="sidebar-panel-title">Contents</div>
+            </div>
+            <div id="outlineContainer" class="outline-container">
+                <div class="outline-empty">No headings found</div>
+            </div>
         </div>
     </div>
 

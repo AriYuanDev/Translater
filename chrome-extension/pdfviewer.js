@@ -1,3 +1,5 @@
+import { setupViewerSidebar } from './viewer-sidebar.js';
+
 /**
  * Translater PDF Reader Script
  */
@@ -53,13 +55,17 @@ let activeOutlineIndex = -1;
 // DOM Elements
 const viewer = document.getElementById('viewer');
 const viewerContainer = document.getElementById('viewerContainer');
-const currentPageInput = document.getElementById('currentPage');
+const currentPageSpan = document.getElementById('currentPage');
 const totalPagesSpan = document.getElementById('totalPages');
 const zoomLevelSpan = document.getElementById('zoomLevel');
 const pdfTitleSpan = document.getElementById('pdfTitle');
 const sidebar = document.getElementById('sidebar');
 const outlineContainer = document.getElementById('outlineContainer');
 const sidebarToggle = document.getElementById('sidebarToggle');
+const fileBrowserContainer = document.getElementById('fileBrowserContainer');
+const sidebarFolderName = document.getElementById('sidebarFolderName');
+const prevPageButton = document.getElementById('prevPage');
+const nextPageButton = document.getElementById('nextPage');
 
 // Constants
 const DEFAULT_SCALE = 1.9;
@@ -381,6 +387,7 @@ async function loadPdf(url) {
 
         pdfDoc = await loadingTask.promise;
         totalPagesSpan.textContent = pdfDoc.numPages;
+        setCurrentPageNumber(1);
         const filename = getPdfFilename(url);
         pdfTitleSpan.textContent = filename;
         document.title = filename;
@@ -497,17 +504,30 @@ async function renderPageContent(pageNum, container) {
 
 // ==================== Toolbar and Sidebar ====================
 
-document.getElementById('prevPage').onclick = () => {
-    const page = parseInt(currentPageInput.value);
+function getCurrentPageNumber() {
+    const page = parseInt(currentPageSpan.textContent, 10);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+function updatePageNavigationButtons() {
+    const currentPage = getCurrentPageNumber();
+    const totalPages = pdfDoc?.numPages || parseInt(totalPagesSpan.textContent, 10) || 1;
+    prevPageButton.disabled = currentPage <= 1;
+    nextPageButton.disabled = currentPage >= totalPages;
+}
+
+function setCurrentPageNumber(pageNum) {
+    currentPageSpan.textContent = String(pageNum);
+    updatePageNavigationButtons();
+}
+
+prevPageButton.onclick = () => {
+    const page = getCurrentPageNumber();
     if (page > 1) scrollToPage(page - 1);
 };
-document.getElementById('nextPage').onclick = () => {
-    const page = parseInt(currentPageInput.value);
+nextPageButton.onclick = () => {
+    const page = getCurrentPageNumber();
     if (page < pdfDoc.numPages) scrollToPage(page + 1);
-};
-currentPageInput.onchange = () => {
-    let page = Math.max(1, Math.min(parseInt(currentPageInput.value), pdfDoc.numPages));
-    scrollToPage(page);
 };
 document.getElementById('zoomOut').onclick = async () => {
     await applyScale(currentScale - ZOOM_STEP);
@@ -523,13 +543,11 @@ document.getElementById('downloadPdf').onclick = () => {
     const url = getPdfUrl();
     if (url) { const a = document.createElement('a'); a.href = url; a.download = decodeURIComponent(url.split('/').pop().split('?')[0]); a.click(); }
 };
-sidebarToggle.onclick = () => { sidebar.classList.toggle('open'); viewerContainer.classList.toggle('sidebar-open'); };
-
 function scrollToPage(pageNum) {
     const container = renderedPages.get(pageNum);
     if (container) {
         container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        currentPageInput.value = pageNum;
+        setCurrentPageNumber(pageNum);
     }
     updateOutlineSelection(pageNum);
 }
@@ -541,7 +559,7 @@ viewerContainer.onscroll = () => {
     for (const [pageNum, container] of renderedPages) {
         const rect = container.getBoundingClientRect();
         if (rect.top <= centerY && rect.bottom >= centerY) {
-            currentPageInput.value = pageNum;
+            setCurrentPageNumber(pageNum);
             activePage = pageNum;
             break;
         }
@@ -585,10 +603,12 @@ async function renderOutline() {
         }
         outlineContainer.appendChild(await createTree(outline));
         outlineEntries.sort((a, b) => a.page - b.page);
-        const initialPage = parseInt(currentPageInput.value, 10) || 1;
+        const initialPage = getCurrentPageNumber();
         updateOutlineSelection(initialPage);
     } catch (e) { console.error(e); outlineContainer.textContent = 'Failed to load outline'; }
 }
+
+updatePageNavigationButtons();
 
 // ==================== Translation Logic (Shadow DOM) ====================
 
@@ -822,5 +842,17 @@ function showError(message) {
 }
 
 const url = getPdfUrl();
-if (url) loadPdf(url); else showError('No PDF file specified');
+if (url) {
+    setupViewerSidebar({
+        currentUrl: url,
+        sidebar,
+        viewerContainer,
+        sidebarToggle,
+        fileBrowserContainer,
+        sidebarFolderName
+    });
+    loadPdf(url);
+} else {
+    showError('No PDF file specified');
+}
 console.log('Translater PDF Reader Loaded (Shadow DOM)');

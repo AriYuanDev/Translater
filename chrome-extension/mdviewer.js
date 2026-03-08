@@ -1,3 +1,5 @@
+import { setupViewerSidebar } from './viewer-sidebar.js';
+
 /**
  * Translater Markdown Reader Script
  */
@@ -47,6 +49,9 @@ const mdTitleSpan = document.getElementById('mdTitle');
 const zoomLevelSpan = document.getElementById('zoomLevel');
 const sidebar = document.getElementById('sidebar');
 const outlineContainer = document.getElementById('outlineContainer');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const fileBrowserContainer = document.getElementById('fileBrowserContainer');
+const sidebarFolderName = document.getElementById('sidebarFolderName');
 
 // Constants
 const POPUP_WIDTH = 760;
@@ -199,11 +204,6 @@ document.getElementById('zoomIn').onclick = () => {
 };
 
 // ==================== Toolbar ====================
-
-document.getElementById('sidebarToggle').onclick = () => {
-    sidebar.classList.toggle('open');
-    viewerContainer.classList.toggle('sidebar-open');
-};
 
 document.getElementById('openOriginal').onclick = () => {
     const url = getMdUrl();
@@ -411,5 +411,17 @@ function showError(message) {
 // ==================== Initialize ====================
 
 const url = getMdUrl();
-if (url) loadMarkdown(url); else showError('No Markdown file specified');
+if (url) {
+    setupViewerSidebar({
+        currentUrl: url,
+        sidebar,
+        viewerContainer,
+        sidebarToggle,
+        fileBrowserContainer,
+        sidebarFolderName
+    });
+    loadMarkdown(url);
+} else {
+    showError('No Markdown file specified');
+}
 console.log('Translater Markdown Reader Loaded (Shadow DOM)');

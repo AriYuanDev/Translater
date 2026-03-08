@@ -18,6 +18,7 @@
 ## Markdown Viewer Tests
 
 - Open a local or remote `.md` file and confirm the custom viewer loads
+- Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm headings appear in the sidebar TOC
 - Confirm inline HTML with scripts/events is not executed
 - Confirm relative links and images resolve correctly
@@ -26,6 +27,7 @@
 ## PDF Viewer Tests
 
 - Open a local or remote `.pdf` file and confirm the custom viewer loads
+- Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the outline sidebar works when the PDF has bookmarks
 - Confirm zoom in / zoom out / fit width work without losing the current reading position
 - Double-click a word on the PDF text layer and confirm the dictionary popup appears
