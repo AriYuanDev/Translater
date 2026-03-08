@@ -1,0 +1,68 @@
+/* Shared viewer toolbar styles */
+
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-left {
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.toolbar-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.toolbar-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.toolbar-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.toolbar-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: white;
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+}
+
+.toolbar-btn:disabled:hover,
+.toolbar-btn:disabled:active {
+    background: rgba(255, 255, 255, 0.15);
+    transform: none;
+}
+
+.zoom-level {
+    min-width: 50px;
+    text-align: center;
+    font-size: 14px;
+    color: white;
+}

@@ -31,60 +31,6 @@ body {
     height: 48px;
 }
 
-.toolbar-left,
-.toolbar-center,
-.toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.toolbar-left {
-    flex: 1;
-    justify-content: flex-start;
-}
-
-.toolbar-right {
-    flex: 1;
-    justify-content: flex-end;
-}
-
-.toolbar-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.toolbar-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.05);
-}
-
-.toolbar-btn:active {
-    transform: scale(0.95);
-}
-
-.toolbar-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: white;
-}
-
-.zoom-level {
-    min-width: 50px;
-    text-align: center;
-    font-size: 14px;
-    color: white;
-}
-
 .md-title {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.9);
