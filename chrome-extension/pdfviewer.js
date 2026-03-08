@@ -72,6 +72,165 @@ const SENTENCE_POPUP_WIDTH = 420;
 const SENTENCE_POPUP_HEIGHT = 180;
 
 let pageObserver = null;
+const textLayerEndDivs = new Map();
+let textLayerSelectionAbortController = null;
+let previousSelectionRange = null;
+
+function normalizeClipboardText(text) {
+    return pdfjsLib.normalizeUnicode(String(text || '').replace(/\u0000/g, ''));
+}
+
+function stopTextLayerEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+function resetTextLayerSelection(endDiv, textLayer) {
+    if (!endDiv || !textLayer) return;
+    textLayer.append(endDiv);
+    endDiv.style.width = '';
+    endDiv.style.height = '';
+    endDiv.style.userSelect = '';
+    textLayer.classList.remove('selecting');
+}
+
+function resetAllTextLayerSelections() {
+    textLayerEndDivs.forEach((endDiv, textLayer) => resetTextLayerSelection(endDiv, textLayer));
+    previousSelectionRange = null;
+}
+
+function clearTextLayerRegistry() {
+    resetAllTextLayerSelections();
+    textLayerEndDivs.clear();
+    textLayerSelectionAbortController?.abort();
+    textLayerSelectionAbortController = null;
+}
+
+function enableGlobalTextLayerSelectionListener() {
+    if (textLayerSelectionAbortController) return;
+
+    textLayerSelectionAbortController = new AbortController();
+    const { signal } = textLayerSelectionAbortController;
+    let isPointerDown = false;
+    let isFirefox;
+
+    const reset = (endDiv, textLayer) => {
+        resetTextLayerSelection(endDiv, textLayer);
+    };
+
+    document.addEventListener('pointerdown', () => {
+        isPointerDown = true;
+    }, { signal });
+
+    document.addEventListener('pointerup', () => {
+        isPointerDown = false;
+        textLayerEndDivs.forEach(reset);
+        previousSelectionRange = null;
+    }, { signal });
+
+    window.addEventListener('blur', () => {
+        isPointerDown = false;
+        textLayerEndDivs.forEach(reset);
+        previousSelectionRange = null;
+    }, { signal });
+
+    document.addEventListener('keyup', () => {
+        if (!isPointerDown) {
+            textLayerEndDivs.forEach(reset);
+            previousSelectionRange = null;
+        }
+    }, { signal });
+
+    document.addEventListener('selectionchange', () => {
+        const selection = document.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            textLayerEndDivs.forEach(reset);
+            previousSelectionRange = null;
+            return;
+        }
+
+        const activeTextLayers = new Set();
+        for (let index = 0; index < selection.rangeCount; index++) {
+            const range = selection.getRangeAt(index);
+            for (const textLayer of textLayerEndDivs.keys()) {
+                if (activeTextLayers.has(textLayer)) continue;
+                try {
+                    if (range.intersectsNode(textLayer)) {
+                        activeTextLayers.add(textLayer);
+                    }
+                } catch {
+                    // Ignore detached nodes during rerender.
+                }
+            }
+        }
+
+        for (const [textLayer, endDiv] of textLayerEndDivs) {
+            if (activeTextLayers.has(textLayer)) {
+                textLayer.classList.add('selecting');
+            } else {
+                reset(endDiv, textLayer);
+            }
+        }
+
+        isFirefox ??= getComputedStyle(textLayerEndDivs.values().next().value)
+            .getPropertyValue('-moz-user-select') === 'none';
+        if (isFirefox) {
+            previousSelectionRange = selection.getRangeAt(0).cloneRange();
+            return;
+        }
+
+        const range = selection.getRangeAt(0);
+        const modifyStart = previousSelectionRange && (
+            range.compareBoundaryPoints(Range.END_TO_END, previousSelectionRange) === 0 ||
+            range.compareBoundaryPoints(Range.START_TO_END, previousSelectionRange) === 0
+        );
+
+        let anchor = modifyStart ? range.startContainer : range.endContainer;
+        if (anchor?.nodeType === Node.TEXT_NODE) {
+            anchor = anchor.parentNode;
+        }
+        if (anchor?.classList?.contains('highlight')) {
+            anchor = anchor.parentNode;
+        }
+
+        if (!modifyStart && anchor && range.endOffset === 0) {
+            do {
+                while (anchor && !anchor.previousSibling) {
+                    anchor = anchor.parentNode;
+                }
+                anchor = anchor?.previousSibling || null;
+            } while (anchor && !anchor.childNodes.length);
+        }
+
+        const parentTextLayer = anchor?.parentElement?.closest('.textLayer') || null;
+        const endDiv = parentTextLayer ? textLayerEndDivs.get(parentTextLayer) : null;
+        if (endDiv && anchor?.parentElement) {
+            endDiv.style.width = parentTextLayer.style.width;
+            endDiv.style.height = parentTextLayer.style.height;
+            endDiv.style.userSelect = 'text';
+            anchor.parentElement.insertBefore(endDiv, modifyStart ? anchor : anchor.nextSibling);
+        }
+
+        previousSelectionRange = range.cloneRange();
+    }, { signal });
+}
+
+function bindTextLayerInteractions(textLayer, endOfContent) {
+    textLayer.tabIndex = 0;
+    textLayer.addEventListener('mousedown', () => {
+        textLayer.classList.add('selecting');
+    });
+    textLayer.addEventListener('copy', event => {
+        const selection = document.getSelection();
+        if (selection && event.clipboardData) {
+            event.clipboardData.setData('text/plain', normalizeClipboardText(selection.toString()));
+        }
+        stopTextLayerEvent(event);
+    });
+
+    textLayerEndDivs.set(textLayer, endOfContent);
+    enableGlobalTextLayerSelectionListener();
+}
 
 function clampScale(scale) {
     return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
@@ -251,6 +410,7 @@ async function calculateFitWidth() {
  * Renders placeholders for all pages and sets up an IntersectionObserver for lazy rendering.
  */
 async function renderAllPages() {
+    clearTextLayerRegistry();
     viewer.innerHTML = '';
     renderedPages.clear();
 
@@ -297,6 +457,7 @@ async function renderPageContent(pageNum, container) {
     try {
         const page = await pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: currentScale });
+        const textViewport = viewport.clone({ dontFlip: true });
         container.innerHTML = '';
 
         const canvas = document.createElement('canvas');
@@ -312,37 +473,22 @@ async function renderPageContent(pageNum, container) {
         textLayer.className = 'textLayer';
         textLayer.style.width = viewport.width + 'px';
         textLayer.style.height = viewport.height + 'px';
-        textLayer.style.setProperty('--scale-factor', viewport.scale);
+        textLayer.style.setProperty('--scale-factor', textViewport.scale);
         container.appendChild(textLayer);
 
         await page.render({ canvasContext: context, viewport }).promise;
 
-        const textContent = await page.getTextContent();
-        const spansToAdjust = [];
-        textContent.items.forEach(item => {
-            if (!item.str || item.str.trim() === '') return;
-            const span = document.createElement('span');
-            span.textContent = item.str;
-            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-            const fontHeight = Math.hypot(tx[2], tx[3]);
-            Object.assign(span.style, {
-                position: 'absolute', left: `${tx[4]}px`, top: `${tx[5] - fontHeight}px`,
-                fontSize: `${fontHeight}px`, fontFamily: textContent.styles[item.fontName]?.fontFamily || 'sans-serif',
-                color: 'transparent', whiteSpace: 'pre', pointerEvents: 'all', transformOrigin: '0% 0%', lineHeight: '1'
-            });
-            const angle = Math.atan2(tx[1], tx[0]);
-            if (Math.abs(angle) > 0.001) span.style.transform = `rotate(${angle}rad)`;
-            textLayer.appendChild(span);
-            if (item.width > 0) spansToAdjust.push({ span, targetWidth: item.width * viewport.scale, angle });
+        const textLayerTask = pdfjsLib.renderTextLayer({
+            textContentSource: page.streamTextContent({ includeMarkedContent: true }),
+            container: textLayer,
+            viewport: textViewport
         });
+        await textLayerTask.promise;
 
-        spansToAdjust.forEach(({ span, targetWidth, angle }) => {
-            const naturalWidth = span.offsetWidth;
-            if (naturalWidth > 0 && Math.abs(targetWidth - naturalWidth) > 0.5) {
-                const scaleX = targetWidth / naturalWidth;
-                span.style.transform = (Math.abs(angle) > 0.001 ? `rotate(${angle}rad) ` : '') + `scaleX(${scaleX})`;
-            }
-        });
+        const endOfContent = document.createElement('div');
+        endOfContent.className = 'endOfContent';
+        textLayer.appendChild(endOfContent);
+        bindTextLayerInteractions(textLayer, endOfContent);
     } catch (err) {
         console.error(err);
         container.innerHTML = '<div style="padding:20px;color:red;">Failed to load page</div>';

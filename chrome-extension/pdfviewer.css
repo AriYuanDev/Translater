@@ -395,6 +395,10 @@ body {
     user-select: none;
 }
 
+.textLayer.selecting .endOfContent {
+    top: 0;
+}
+
 /* ==================== Translator Popup Styles (consistent with styles.css) ==================== */
 
 .translator-popup {
