@@ -1,0 +1,77 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Outlines 8 0 R /PageMode /UseOutlines >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Length 251 >>
+stream
+BT
+/F1 24 Tf
+72 740 Td
+(Translater PDF Smoke Test) Tj
+0 -34 Td
+/F1 14 Tf
+(Double-click metamorphosis on this page.) Tj
+0 -24 Td
+(Select The quick brown fox jumps over the lazy dog.) Tj
+0 -24 Td
+(Use the sidebar outline to jump between sections.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Length 267 >>
+stream
+BT
+/F1 22 Tf
+72 740 Td
+(Page Two Notes) Tj
+0 -34 Td
+/F1 14 Tf
+(Dictionary fallback should handle unfamiliarity.) Tj
+0 -24 Td
+(Selection translation should stay consistent with Markdown and web pages.) Tj
+0 -24 Td
+(Open Original should bypass the custom viewer.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Outlines /First 9 0 R /Last 10 0 R /Count 2 >>
+endobj
+9 0 obj
+<< /Title (Overview) /Parent 8 0 R /Dest [3 0 R /XYZ null null null] /Next 10 0 R >>
+endobj
+10 0 obj
+<< /Title (Notes) /Parent 8 0 R /Dest [4 0 R /XYZ null null null] /Prev 9 0 R >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000097 00000 n 
+0000000160 00000 n 
+0000000286 00000 n 
+0000000412 00000 n 
+0000000482 00000 n 
+0000000784 00000 n 
+0000001102 00000 n 
+0000001174 00000 n 
+0000001274 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+1371
+%%EOF

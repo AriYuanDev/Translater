@@ -7,6 +7,7 @@ Translater is now a **Chrome-only** translation extension focused on fast dictio
 ```text
 Translater/
 ├── chrome-extension/      # Chrome extension source
+├── manual-tests/          # Local smoke-test fixtures for web, Markdown, and PDF
 ├── .gitignore             # Root gitignore
 ├── README.md              # Project overview
 ├── TECHNICAL.md           # Architecture notes
@@ -44,7 +45,9 @@ Translater/
 ## Automated Validation
 
 - Run `npm test` to execute the lightweight Node + jsdom suite for routing helpers, sidebar parsing, Markdown sanitization, and shared interaction flows.
+- Run `npm run smoke:playwright` to launch a real browser, load the unpacked extension, and smoke-test the bundled web/Markdown/PDF fixtures end to end.
 
 ## Manual Validation
 
 Use `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/TEST_TRANSLATION.md` as the smoke-test checklist after loading the unpacked extension.
+The fixed local smoke-test files live in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests`.

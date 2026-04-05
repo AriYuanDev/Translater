@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="240" viewBox="0 0 720 240" role="img" aria-labelledby="title desc">
+    <title id="title">Translater Markdown Relative Image</title>
+    <desc id="desc">A simple diagram used to verify that relative image paths render inside the Markdown viewer.</desc>
+    <rect width="720" height="240" fill="#f3f4f6" rx="24" />
+    <rect x="32" y="44" width="196" height="152" fill="#dbeafe" rx="18" />
+    <rect x="262" y="44" width="196" height="152" fill="#dcfce7" rx="18" />
+    <rect x="492" y="44" width="196" height="152" fill="#fee2e2" rx="18" />
+    <text x="130" y="102" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="26" fill="#1e3a8a">Web</text>
+    <text x="130" y="142" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="18" fill="#1e3a8a">Selection toolbar</text>
+    <text x="360" y="102" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="26" fill="#166534">Markdown</text>
+    <text x="360" y="142" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="18" fill="#166534">Relative image loads</text>
+    <text x="590" y="102" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="26" fill="#991b1b">PDF</text>
+    <text x="590" y="142" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="18" fill="#991b1b">Outline and text layer</text>
+    <path d="M228 120H252" stroke="#475569" stroke-width="5" stroke-linecap="round" />
+    <path d="M458 120H482" stroke="#475569" stroke-width="5" stroke-linecap="round" />
+</svg>

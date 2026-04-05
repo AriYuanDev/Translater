@@ -47,3 +47,6 @@ yarn-error.log*
 
 # Testing
 **/coverage/
+
+# Local browser automation artifacts
+output/playwright/

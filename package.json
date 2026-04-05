@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "smoke:playwright": "bash scripts/playwright-smoke.sh"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"

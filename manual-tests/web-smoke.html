@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Translater Web Smoke Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        main {
+            max-width: 860px;
+            margin: 48px auto;
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2rem;
+        }
+
+        p,
+        li {
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        .callout {
+            padding: 18px 20px;
+            margin: 20px 0;
+            background: #eef4ff;
+            border-left: 4px solid #2563eb;
+            border-radius: 12px;
+        }
+
+        code {
+            padding: 2px 6px;
+            background: #e5e7eb;
+            border-radius: 6px;
+        }
+
+        a {
+            color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Translater Web Smoke Test</h1>
+        <p>This page gives you fixed text for dictionary lookup, sentence translation, and navigation into the Markdown and PDF viewers.</p>
+
+        <div class="callout">
+            <p>Double-click <strong>metamorphosis</strong> and confirm the dictionary popup appears.</p>
+            <p>Select <strong>The quick brown fox jumps over the lazy dog.</strong> and confirm the floating toolbar appears.</p>
+            <p>Double-click <code>1234</code> or <code>...</code> and confirm no dictionary popup appears.</p>
+        </div>
+
+        <h2>Viewer Links</h2>
+        <ul>
+            <li><a href="./reader-smoke.md">Open the Markdown smoke file</a></li>
+            <li><a href="./reference-note.markdown">Open the sibling Markdown note</a></li>
+            <li><a href="./viewer-smoke.pdf">Open the PDF smoke file</a></li>
+        </ul>
+
+        <h2>Shared UI Check</h2>
+        <p>Use this sentence to compare the web page, Markdown viewer, and PDF viewer: <strong>Selection translation should stay consistent across every reading surface.</strong></p>
+    </main>
+</body>
+</html>
