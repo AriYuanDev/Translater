@@ -76,6 +76,16 @@ function getDirectoryLabel(directoryUrl) {
     }
 }
 
+function getHttpStatusFromError(error) {
+    const match = String(error?.message || '').match(/^HTTP\s+(\d{3})$/);
+    return match ? Number(match[1]) : null;
+}
+
+function shouldFallbackToCurrentDocument(error) {
+    const status = getHttpStatusFromError(error);
+    return status === 401 || status === 403 || status === 404;
+}
+
 function createViewerUrl(url) {
     const viewerType = getViewerType(url);
     if (!viewerType) return url;
@@ -269,6 +279,16 @@ function renderDocumentList(container, documents, currentUrl) {
     });
 }
 
+function renderCurrentDocumentFallback(container, currentUrl) {
+    const currentEntry = createDocumentEntry(currentUrl);
+    if (!currentEntry) {
+        renderEmptyState(container, 'Only the current file is available.');
+        return;
+    }
+
+    renderDocumentList(container, [currentEntry], currentUrl);
+}
+
 function getLoadErrorMessage(currentUrl, error) {
     if (String(currentUrl || '').startsWith('file://')) {
         return 'Unable to read this folder. Enable “Allow access to file URLs” for the extension first.';
@@ -323,6 +343,16 @@ export function setupViewerSidebar({
         }
         renderDocumentList(fileBrowserContainer, documents, currentUrl);
     }).catch(error => {
+        if (shouldFallbackToCurrentDocument(error)) {
+            if (sidebarFolderName) {
+                const directoryUrl = getDirectoryUrl(currentUrl);
+                sidebarFolderName.textContent = getDirectoryLabel(directoryUrl);
+                sidebarFolderName.title = directoryUrl;
+            }
+            renderCurrentDocumentFallback(fileBrowserContainer, currentUrl);
+            return;
+        }
+
         console.error('Failed to load sibling documents:', error);
         if (sidebarFolderName) {
             sidebarFolderName.textContent = 'Current Folder';
