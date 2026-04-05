@@ -1,4 +1,5 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
+import { sanitizeMarkdownHtml, rewriteRelativePaths } from './markdown-helpers.js';
 
 /**
  * Translater Markdown Reader Script
@@ -6,15 +7,20 @@ import { setupViewerSidebar } from './viewer-sidebar.js';
 
 // Import utility functions
 let utils;
+let interactionController;
 try {
     const utilsUrl = chrome.runtime.getURL('utils.js');
-    utils = await import(utilsUrl);
+    const interactionControllerUrl = chrome.runtime.getURL('interaction-controller.js');
+    [utils, interactionController] = await Promise.all([
+        import(utilsUrl),
+        import(interactionControllerUrl)
+    ]);
 } catch (e) {
     console.log('[Translater] Extension context invalidated, please refresh the page');
     throw new Error('Failed to initialize extension utilities');
 }
 
-if (!utils) {
+if (!utils || !interactionController) {
     throw new Error('Extension utilities not available');
 }
 
@@ -22,25 +28,19 @@ const {
     escapeHtml,
     isAllEnglish,
     isProbablyWord,
-    createSpeakerSVG,
-    calculatePopupPosition,
-    sendMessageSafe,
-    speakText,
     isContextValid,
-    ensureShadowRoot,
-    createCloseButton,
-    createSpeakButton,
     removeAllPopups,
     getCurrentPopup,
-    setCurrentPopup,
-    findBestAudioUrl,
-    getShadowHost,
-    createDefinitionPair,
+    isTranslatorUiClickPath,
     showSelectionToolbar,
-    showSentencePopup,
     openExternalUrl,
     appendNoRedirectParam
 } = utils;
+
+const {
+    handleSelectionTranslation,
+    handleWordLookupInteraction
+} = interactionController;
 
 // DOM Elements
 const mdContent = document.getElementById('mdContent');
@@ -54,8 +54,6 @@ const fileBrowserContainer = document.getElementById('fileBrowserContainer');
 const sidebarFolderName = document.getElementById('sidebarFolderName');
 
 // Constants
-const POPUP_WIDTH = 760;
-const POPUP_HEIGHT = 260;
 const SENTENCE_POPUP_WIDTH = 420;
 const SENTENCE_POPUP_HEIGHT = 180;
 
@@ -75,31 +73,6 @@ function isFileUrl(url) {
     return typeof url === 'string' && url.startsWith('file://');
 }
 
-function sanitizeMarkdownHtml(html) {
-    const template = document.createElement('template');
-    template.innerHTML = html;
-
-    template.content.querySelectorAll('script, iframe, object, embed, link, meta, style, base, form').forEach(node => {
-        node.remove();
-    });
-
-    template.content.querySelectorAll('*').forEach(element => {
-        Array.from(element.attributes).forEach(attribute => {
-            const name = attribute.name.toLowerCase();
-            const value = attribute.value.trim();
-            if (name.startsWith('on') || name === 'srcdoc') {
-                element.removeAttribute(attribute.name);
-                return;
-            }
-            if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'formaction') && /^javascript:/i.test(value)) {
-                element.removeAttribute(attribute.name);
-            }
-        });
-    });
-
-    return template.innerHTML;
-}
-
 async function loadMarkdown(url) {
     try {
         showLoading(true);
@@ -114,7 +87,7 @@ async function loadMarkdown(url) {
 
         // Fix relative paths
         const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-        fixRelativePaths(baseUrl);
+        rewriteRelativePaths(mdContent, baseUrl);
 
         // Set title
         const filename = decodeURIComponent(url.split('/').pop().split('?')[0]);
@@ -133,26 +106,6 @@ async function loadMarkdown(url) {
         }
         showError(msg);
     }
-}
-
-function fixRelativePaths(baseUrl) {
-    mdContent.querySelectorAll('img[src]').forEach(img => {
-        const src = img.getAttribute('src');
-        if (src && !src.match(/^(https?:|data:|file:)/i)) {
-            img.src = new URL(src, baseUrl).href;
-        }
-    });
-    mdContent.querySelectorAll('a[href]').forEach(a => {
-        const href = a.getAttribute('href');
-        if (href && !href.match(/^(https?:|data:|file:|#|mailto:|javascript:)/i)) {
-            a.href = new URL(href, baseUrl).href;
-        }
-        // Open links in new tab
-        if (href && !href.startsWith('#')) {
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-        }
-    });
 }
 
 // ==================== Table of Contents ====================
@@ -218,121 +171,12 @@ mdContent.addEventListener('dblclick', async (e) => {
     if (!isContextValid()) return;
     const word = window.getSelection().toString().trim();
     if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
-
-    const root = await ensureShadowRoot();
-    if (!root) return;
-    removeAllPopups();
-    const popup = document.createElement('div');
-    popup.className = 'translator-popup';
-    popup.style.pointerEvents = 'auto';
-
-    const content = document.createElement('div');
-    content.className = 'translator-popup-content';
-    const header = document.createElement('div');
-    header.className = 'translator-word-header';
-    const wInfo = document.createElement('div');
-    wInfo.className = 'translator-word-info';
-    const wSpan = document.createElement('span'); wSpan.className = 'translator-word'; wSpan.textContent = word;
-    wInfo.appendChild(wSpan);
-    header.appendChild(wInfo);
-    header.appendChild(createSpeakButton(() => { speakText(word); }));
-    const meanings = document.createElement('div'); meanings.className = 'translator-meanings';
-    const loading = document.createElement('div'); loading.className = 'translator-loading'; loading.textContent = 'Searching...';
-    meanings.appendChild(loading);
-    content.appendChild(header); content.appendChild(meanings);
-
-    popup.appendChild(content);
-    popup.appendChild(createCloseButton(removeAllPopups));
-    root.appendChild(popup);
-    setCurrentPopup(popup);
-    const activePopup = popup;
-
-    const width = Math.min(POPUP_WIDTH, window.innerWidth - 20);
-    const pos = calculatePopupPosition(e.clientX, e.clientY, width, POPUP_HEIGHT, {
-        preferBelow: true, alignCenter: true, anchorX: e.clientX, anchorY: e.clientY
+    await handleWordLookupInteraction({
+        word,
+        x: e.clientX,
+        y: e.clientY
     });
-    popup.style.left = pos.left + 'px';
-    popup.style.top = pos.top + 'px';
-
-    const response = await sendMessageSafe({ action: 'fetchDictionary', word: word.toLowerCase() });
-    if (!isContextValid() || getCurrentPopup() !== activePopup) return;
-    if (response && response.success && response.data) {
-        updatePopupWithData(response.data, word);
-        const isMorphed = response.data.word && response.data.word.toLowerCase() !== word.toLowerCase();
-        if (isMorphed) {
-            speakText(word);
-        } else {
-            const best = findBestAudioUrl(response.data.phonetics);
-            if (best) new Audio(best).play().catch(() => speakText(word)); else speakText(word);
-        }
-    } else if (response && response.error) {
-        meanings.innerHTML = '';
-        const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${response.error}`;
-        meanings.appendChild(err);
-    } else {
-        const tr = await sendMessageSafe({ action: 'translate', text: word });
-        if (!isContextValid() || getCurrentPopup() !== activePopup) return;
-        meanings.innerHTML = '';
-        if (tr && tr.success && tr.data) {
-            const res = document.createElement('div'); res.className = 'translator-translation'; res.textContent = tr.data.translated || 'No results';
-            meanings.appendChild(res);
-            speakText(word);
-        } else {
-            const errText = (tr && tr.error) || 'Query failed';
-            const err = document.createElement('div'); err.className = 'translator-error'; err.textContent = `❌ ${errText}`;
-            meanings.appendChild(err);
-        }
-    }
 });
-
-function updatePopupWithData(data, word) {
-    if (!getCurrentPopup() || !data) return;
-    const content = getCurrentPopup().querySelector('.translator-popup-content');
-    content.innerHTML = '';
-    const header = document.createElement('div'); header.className = 'translator-word-header';
-    const info = document.createElement('div');
-    info.className = 'translator-word-info';
-    const w = document.createElement('span');
-    w.className = 'translator-word';
-    w.textContent = data.word || word;
-    info.appendChild(w);
-
-    if (data.word && word && data.word.toLowerCase() !== word.toLowerCase()) {
-        const sourceSpan = document.createElement('span');
-        sourceSpan.className = 'translator-source-word';
-        sourceSpan.textContent = `(from ${word}) `;
-        const miniBtn = document.createElement('span');
-        miniBtn.className = 'translator-mini-speak';
-        miniBtn.innerHTML = createSpeakerSVG();
-        miniBtn.onclick = (e) => { e.stopPropagation(); speakText(word); };
-        sourceSpan.appendChild(miniBtn);
-        info.appendChild(sourceSpan);
-    }
-    if (data.phonetic) { const p = document.createElement('span'); p.className = 'translator-phonetic'; p.textContent = data.phonetic; info.appendChild(p); }
-    header.appendChild(info);
-    const best = findBestAudioUrl(data.phonetics);
-    const speakHandler = () => {
-        if (best) new Audio(best).play().catch(() => speakText(data.word || word));
-        else speakText(data.word || word);
-    };
-    header.appendChild(createSpeakButton(speakHandler));
-
-    const meaningsCont = document.createElement('div'); meaningsCont.className = 'translator-meanings';
-    if (data.meanings?.length) {
-        data.meanings.slice(0, 3).forEach(m => {
-            const item = document.createElement('div'); item.className = 'translator-meaning-item';
-            const pos = document.createElement('span'); pos.className = 'translator-pos'; pos.textContent = m.partOfSpeech;
-            item.appendChild(pos);
-            m.definitions.slice(0, 2).forEach(d => {
-                const pair = createDefinitionPair(d.definition);
-                item.appendChild(pair);
-                if (d.example) { const ex = document.createElement('div'); ex.className = 'translator-example'; ex.textContent = `"${d.example}"`; item.appendChild(ex); }
-            });
-            meaningsCont.appendChild(item);
-        });
-    } else { const empty = document.createElement('div'); empty.className = 'translator-definition'; empty.textContent = 'No detailed definitions found.'; meaningsCont.appendChild(empty); }
-    content.appendChild(header); content.appendChild(meaningsCont);
-}
 
 mdContent.onmouseup = async (e) => {
     if (!isContextValid()) return;
@@ -346,7 +190,13 @@ mdContent.onmouseup = async (e) => {
                 x: e.clientX,
                 y: e.clientY,
                 minTop: 60,
-                onTranslate: translateSelection
+                onTranslate: (selectedText, x, y) => handleSelectionTranslation({
+                    text: selectedText,
+                    x,
+                    y,
+                    popupWidth: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
+                    popupHeight: SENTENCE_POPUP_HEIGHT
+                })
             });
         } catch (err) {
             console.error('[Translater] Mouseup error:', err);
@@ -354,33 +204,8 @@ mdContent.onmouseup = async (e) => {
     }, 50);
 };
 
-async function translateSelection(text, x, y) {
-    const { popup, content } = await showSentencePopup(x, y, {
-        width: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
-        height: SENTENCE_POPUP_HEIGHT
-    });
-    if (!popup || !content) return;
-
-    const response = await sendMessageSafe({ action: 'translate', text });
-    if (!isContextValid() || getCurrentPopup() !== popup) return;
-    if (response && response.success && response.data) {
-        content.innerHTML = '';
-        const res = document.createElement('div');
-        res.className = 'translator-result';
-        res.textContent = response.data.translated || 'No translation results';
-        content.appendChild(res);
-    } else {
-        content.textContent = `❌ ${(response && response.error) || 'Translation failed'}`;
-    }
-}
-
 document.addEventListener('mousedown', (e) => {
-    const path = e.composedPath();
-    const isClickInside = path.some(el =>
-        el === getShadowHost() ||
-        (el.classList && (el.classList.contains('translator-popup') || el.classList.contains('translator-float-buttons') || el.classList.contains('translator-sentence-popup')))
-    );
-    if (!isClickInside && getCurrentPopup()) removeAllPopups();
+    if (!isTranslatorUiClickPath(e.composedPath()) && getCurrentPopup()) removeAllPopups();
     if (!isContextValid()) return;
 });
 

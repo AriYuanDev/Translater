@@ -1,3 +1,10 @@
+import {
+  createViewerPageUrl,
+  hasViewerBypass,
+  isMdUrl,
+  isPdfUrl
+} from './viewer-routing.js';
+
 // Translater - Chrome Translation Extension Background Worker
 
 // ==================== Dictionary Cache ====================
@@ -114,50 +121,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ==================== PDF Redirection ====================
 
-// Check if URL is a PDF
-function isPdfUrl(url) {
-  if (!url) return false;
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname.toLowerCase();
-    // Basic check: ends with .pdf
-    if (pathname.endsWith('.pdf')) return true;
-    // Advanced check: URL path contains .pdf in the last segment
-    const pathSegments = pathname.split('/');
-    const lastSegment = pathSegments[pathSegments.length - 1];
-    return lastSegment.includes('.pdf');
-  } catch {
-    return url.toLowerCase().includes('.pdf');
-  }
-}
-
-// Check if URL is a Markdown file
-function isMdUrl(url) {
-  if (!url) return false;
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname.toLowerCase();
-    return pathname.endsWith('.md') || pathname.endsWith('.markdown');
-  } catch {
-    const lower = url.toLowerCase();
-    return lower.endsWith('.md') || lower.endsWith('.markdown');
-  }
-}
-
-function hasViewerBypass(url) {
-  if (!url) return false;
-  try {
-    const urlObj = new URL(url);
-    return urlObj.searchParams.has('translater_no_redirect') || urlObj.hash.includes('no_redirect');
-  } catch {
-    return url.includes('no_redirect');
-  }
-}
-
-function createViewerUrl(viewerPage, sourceUrl) {
-  return chrome.runtime.getURL(viewerPage) + '?url=' + encodeURIComponent(sourceUrl);
-}
-
 // Monitor navigation to detect and redirect PDFs and Markdown files
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
@@ -165,9 +128,13 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (hasViewerBypass(details.url)) return;
 
   if (isPdfUrl(details.url)) {
-    chrome.tabs.update(details.tabId, { url: createViewerUrl('pdfviewer.html', details.url) });
+    chrome.tabs.update(details.tabId, {
+      url: createViewerPageUrl('pdfviewer.html', details.url, value => chrome.runtime.getURL(value))
+    });
   } else if (isMdUrl(details.url)) {
-    chrome.tabs.update(details.tabId, { url: createViewerUrl('mdviewer.html', details.url) });
+    chrome.tabs.update(details.tabId, {
+      url: createViewerPageUrl('mdviewer.html', details.url, value => chrome.runtime.getURL(value))
+    });
   }
 });
 

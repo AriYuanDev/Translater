@@ -36,9 +36,14 @@ Translater/
 ## Development Notes
 
 - Shared popup / floating toolbar logic lives in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/utils.js`.
+- Shared word lookup and sentence translation flow lives in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/interaction-controller.js`.
 - PDF viewer logic lives in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/pdfviewer.js`.
 - Markdown viewer logic lives in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/mdviewer.js`.
 - Background routing and API orchestration live in `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/background.js`.
+
+## Automated Validation
+
+- Run `npm test` to execute the lightweight Node + jsdom suite for routing helpers, sidebar parsing, Markdown sanitization, and shared interaction flows.
 
 ## Manual Validation
 

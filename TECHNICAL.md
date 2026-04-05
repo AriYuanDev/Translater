@@ -8,6 +8,7 @@ Translater is a Chrome extension built around four main surfaces:
 - `content.js`: page-level dictionary lookup and sentence translation.
 - `pdfviewer.js`: custom PDF reader built on PDF.js.
 - `mdviewer.js`: custom Markdown reader built on marked.js.
+- `interaction-controller.js`: shared async controller for word lookup and sentence translation across all three surfaces.
 
 ## Shared Runtime Utilities
 
@@ -23,7 +24,9 @@ Translater is a Chrome extension built around four main surfaces:
 - sentence translation popup rendering
 - external URL opening and viewer bypass URL generation
 
-This keeps `content.js`, `pdfviewer.js`, and `mdviewer.js` aligned and reduces behavior drift.
+`/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/interaction-controller.js` now owns the async popup lifecycle so `content.js`, `pdfviewer.js`, and `mdviewer.js` only keep event wiring and surface-specific sizing.
+
+`/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/viewer-routing.js`, `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/viewer-sidebar-helpers.js`, and `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/markdown-helpers.js` hold the pure routing, sidebar parsing, and Markdown helper logic that is reused by runtime code and tests.
 
 ## Background Flow
 
@@ -69,3 +72,8 @@ Dictionary popups now use popup identity checks so older async responses cannot 
 - HTML messages shown in the UI still go through `escapeHtml()`.
 - Rendered Markdown is sanitized to remove dangerous tags, event handlers, and `javascript:` URLs.
 - Messaging to the background script uses timeout guards.
+
+## Testing Notes
+
+- The repository now includes a lightweight `node:test` + `jsdom` suite for routing helpers, sidebar parsing, Markdown sanitization, and shared interaction flows.
+- Manual smoke tests still matter for real Chrome behavior, especially PDF text selection, custom viewer navigation, and extension-permission edge cases.

@@ -31,7 +31,8 @@
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "options_page": "options.html",
   "action": {
@@ -58,6 +59,10 @@
         "mdviewer.css",
         "viewer-toolbar.css",
         "viewer-sidebar.js",
+        "viewer-routing.js",
+        "viewer-sidebar-helpers.js",
+        "markdown-helpers.js",
+        "interaction-controller.js",
         "marked.min.js",
         "styles.css",
         "pdf.min.mjs",

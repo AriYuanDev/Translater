@@ -655,3 +655,36 @@ export function setHideFloatButtonsTimeout(t) { hideFloatButtonsTimeout = t; }
  */
 export function getShadowRoot() { return shadowRoot; }
 export function getShadowHost() { return shadowHost; }
+
+export function isTranslatorUiClickPath(path) {
+    return Array.from(path || []).some(el =>
+        el === getShadowHost() ||
+        (el.classList && (
+            el.classList.contains('translator-popup') ||
+            el.classList.contains('translator-float-buttons') ||
+            el.classList.contains('translator-sentence-popup')
+        ))
+    );
+}
+
+export function __resetUiStateForTests() {
+    if (hideFloatButtonsTimeout) {
+        clearTimeout(hideFloatButtonsTimeout);
+        hideFloatButtonsTimeout = null;
+    }
+    removeAllPopups();
+    if (shadowHost?.isConnected) {
+        shadowHost.remove();
+    }
+    shadowHost = null;
+    shadowRoot = null;
+    currentPopup = null;
+    currentFloatButtons = null;
+    stylesLoaded = false;
+    stylesLoadPromise = null;
+}
+
+export function __setStylesLoadedForTests() {
+    stylesLoaded = true;
+    stylesLoadPromise = Promise.resolve();
+}
