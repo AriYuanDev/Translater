@@ -2,7 +2,7 @@
 
 ## Setup
 
-1. Load `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension` in `chrome://extensions`
+1. Load `chrome-extension/` in `chrome://extensions`
 2. Enable **Allow access to file URLs** if you want to test local Markdown/PDF files
 3. Configure DeepL and Merriam-Webster keys in the options page
 4. Run `npm test` once before Chrome smoke testing
@@ -10,16 +10,16 @@
 
 ## Local Smoke Test Files
 
-- Web page: `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/web-smoke.html`
-- Primary Markdown file: `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/reader-smoke.md`
-- Sibling Markdown file: `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/reference-note.markdown`
-- PDF file: `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/viewer-smoke.pdf`
+- Web page: `manual-tests/web-smoke.html`
+- Primary Markdown file: `manual-tests/reader-smoke.md`
+- Sibling Markdown file: `manual-tests/reference-note.markdown`
+- PDF file: `manual-tests/viewer-smoke.pdf`
 
 Open these local files directly in Chrome after enabling file URL access. Keeping all test documents in the same folder makes the sidebar file list deterministic for Markdown and PDF smoke tests.
 
 ## Web Page Tests
 
-- Open `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/web-smoke.html`
+- Open `manual-tests/web-smoke.html`
 - Double-click `metamorphosis` on an English page and confirm the dictionary popup appears
 - Confirm the dictionary popup wording and layout match the PDF and Markdown viewers
 - Double-click an obvious non-word like `...` or `1234` and confirm no dictionary popup appears
@@ -32,7 +32,7 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 
 ## Markdown Viewer Tests
 
-- Open `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/reader-smoke.md` and confirm the custom viewer loads
+- Open `manual-tests/reader-smoke.md` and confirm the custom viewer loads
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `reader-smoke.md`, `reference-note.markdown`, and `viewer-smoke.pdf`
 - Confirm headings appear in the sidebar TOC
@@ -45,7 +45,7 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 
 ## PDF Viewer Tests
 
-- Open `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/manual-tests/viewer-smoke.pdf` and confirm the custom viewer loads
+- Open `manual-tests/viewer-smoke.pdf` and confirm the custom viewer loads
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `viewer-smoke.pdf`, `reader-smoke.md`, and `reference-note.markdown`
 - Confirm the outline sidebar shows `Overview` and `Notes`, and both entries jump to the expected page

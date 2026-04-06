@@ -21,6 +21,7 @@ Thumbs.db
 .swiftpm/
 
 # IDE Configs
+.claude/
 .vscode/
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -49,4 +50,5 @@ yarn-error.log*
 **/coverage/
 
 # Local browser automation artifacts
+output/
 output/playwright/

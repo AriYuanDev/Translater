@@ -12,7 +12,7 @@ Translater is a Chrome extension built around four main surfaces:
 
 ## Shared Runtime Utilities
 
-`/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/utils.js` centralizes the common runtime helpers:
+`chrome-extension/utils.js` centralizes the common runtime helpers:
 
 - extension-context checks
 - Shadow DOM setup and shared style loading
@@ -24,9 +24,9 @@ Translater is a Chrome extension built around four main surfaces:
 - sentence translation popup rendering
 - external URL opening and viewer bypass URL generation
 
-`/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/interaction-controller.js` now owns the async popup lifecycle so `content.js`, `pdfviewer.js`, and `mdviewer.js` only keep event wiring and surface-specific sizing.
+`chrome-extension/interaction-controller.js` now owns the async popup lifecycle so `content.js`, `pdfviewer.js`, and `mdviewer.js` only keep event wiring and surface-specific sizing.
 
-`/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/viewer-routing.js`, `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/viewer-sidebar-helpers.js`, and `/Users/zhaozeyi/Documents/gemini cli workspace/Translater/chrome-extension/markdown-helpers.js` hold the pure routing, sidebar parsing, and Markdown helper logic that is reused by runtime code and tests.
+`chrome-extension/viewer-routing.js`, `chrome-extension/viewer-sidebar-helpers.js`, and `chrome-extension/markdown-helpers.js` hold the pure routing, sidebar parsing, and Markdown helper logic that is reused by runtime code and tests.
 
 ## Background Flow
 
