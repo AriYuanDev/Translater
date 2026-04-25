@@ -27,10 +27,9 @@ const {
     escapeHtml,
     isAllEnglish,
     isProbablyWord,
-    isTranslatorUiClickPath,
     isContextValid,
-    removeAllPopups,
-    getCurrentPopup,
+    dismissTranslatorUiOnOutsideEvent,
+    dismissTranslatorUiOnFrameBlur,
     showSelectionToolbar,
     openExternalUrl
 } = utils;
@@ -654,10 +653,9 @@ viewer.onmouseup = async (e) => {
     }, 50);
 };
 
-document.addEventListener('mousedown', (e) => {
-    if (!isTranslatorUiClickPath(e.composedPath()) && getCurrentPopup()) removeAllPopups();
-    if (!isContextValid()) return;
-});
+window.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 
 function showLoading(show) {
     let overlay = document.querySelector('.loading-overlay');

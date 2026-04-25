@@ -667,6 +667,26 @@ export function isTranslatorUiClickPath(path) {
     );
 }
 
+export function dismissTranslatorUiOnOutsideEvent(event) {
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    if (!isTranslatorUiClickPath(path) && getCurrentPopup()) {
+        removeAllPopups();
+        return true;
+    }
+    return false;
+}
+
+export function dismissTranslatorUiOnFrameBlur() {
+    if (!getCurrentPopup()) return false;
+
+    const activeTag = document.activeElement?.tagName;
+    if (activeTag === 'IFRAME' || activeTag === 'FRAME') {
+        removeAllPopups();
+        return true;
+    }
+    return false;
+}
+
 export function __resetUiStateForTests() {
     if (hideFloatButtonsTimeout) {
         clearTimeout(hideFloatButtonsTimeout);

@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 import {
     __resetUiStateForTests,
     __setStylesLoadedForTests,
+    dismissTranslatorUiOnOutsideEvent,
+    ensureShadowRoot,
     getShadowRoot,
     isTranslatorUiClickPath,
+    setCurrentPopup,
     showSelectionToolbar
 } from '../chrome-extension/utils.js';
 import {
@@ -61,4 +64,27 @@ test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPat
     }]);
     assert.equal(isTranslatorUiClickPath([translateButton, toolbar]), true);
     assert.equal(isTranslatorUiClickPath([outsideElement]), false);
+});
+
+test('dismissTranslatorUiOnOutsideEvent closes popup during capture before page stops propagation', async () => {
+    const shadowRoot = await ensureShadowRoot();
+    const popup = document.createElement('div');
+    popup.className = 'translator-popup';
+    shadowRoot.appendChild(popup);
+    setCurrentPopup(popup);
+
+    const pageElement = document.createElement('button');
+    document.body.appendChild(pageElement);
+    pageElement.addEventListener('mousedown', event => {
+        event.stopPropagation();
+    });
+
+    document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+    pageElement.dispatchEvent(new window.MouseEvent('mousedown', {
+        bubbles: true,
+        composed: true
+    }));
+    document.removeEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+
+    assert.equal(shadowRoot.querySelector('.translator-popup'), null);
 });

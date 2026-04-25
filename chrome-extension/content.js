@@ -27,10 +27,9 @@
     const {
         isAllEnglish,
         isContextValid,
-        removeAllPopups,
-        getCurrentPopup,
         isProbablyWord,
-        isTranslatorUiClickPath,
+        dismissTranslatorUiOnOutsideEvent,
+        dismissTranslatorUiOnFrameBlur,
         showSelectionToolbar
     } = utils;
 
@@ -97,13 +96,8 @@
     });
 
     // Dismissal
-    document.addEventListener('mousedown', (e) => {
-        if (!isTranslatorUiClickPath(e.composedPath()) && getCurrentPopup()) {
-            removeAllPopups();
-        }
-
-        // Only continue for other logic if context is valid
-        if (!isContextValid()) return;
-    });
+    window.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+    document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+    window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
     console.log('Translater Extension Loaded (Shadow DOM)');
 })();

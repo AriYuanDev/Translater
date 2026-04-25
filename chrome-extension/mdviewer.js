@@ -29,9 +29,8 @@ const {
     isAllEnglish,
     isProbablyWord,
     isContextValid,
-    removeAllPopups,
-    getCurrentPopup,
-    isTranslatorUiClickPath,
+    dismissTranslatorUiOnOutsideEvent,
+    dismissTranslatorUiOnFrameBlur,
     showSelectionToolbar,
     openExternalUrl,
     appendNoRedirectParam
@@ -204,10 +203,9 @@ mdContent.onmouseup = async (e) => {
     }, 50);
 };
 
-document.addEventListener('mousedown', (e) => {
-    if (!isTranslatorUiClickPath(e.composedPath()) && getCurrentPopup()) removeAllPopups();
-    if (!isContextValid()) return;
-});
+window.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
+window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 
 // ==================== Loading / Error UI ====================
 
