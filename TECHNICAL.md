@@ -2,7 +2,9 @@
 
 ## Overview
 
-Translater is a Chrome extension built around four main surfaces:
+Translater is now organized around a Chrome extension surface and a separate Android app surface.
+
+The Chrome extension is built around these runtime surfaces:
 
 - `background.js`: API orchestration, caching, and viewer redirection.
 - `content.js`: page-level dictionary lookup and sentence translation.
@@ -77,3 +79,25 @@ Dictionary popups now use popup identity checks so older async responses cannot 
 
 - The repository now includes a lightweight `node:test` + `jsdom` suite for routing helpers, sidebar parsing, Markdown sanitization, and shared interaction flows.
 - Manual smoke tests still matter for real Chrome behavior, especially PDF text selection, custom viewer navigation, and extension-permission edge cases.
+
+## Android App
+
+`android-app/` is an independent Gradle Android project. It does not wrap the Chrome extension in WebView.
+
+- UI stack: Kotlin, Jetpack Compose, Material 3, and MVI state flow.
+- Reader: Android Storage Access Framework opens local Markdown files without broad filesystem permission.
+- Rendering: Markwon renders Markdown into a native `TextView`.
+- Lookup: double-tap maps the touch position to a character offset, extracts an English word, then sends `ReaderIntent.LookupWord`.
+- Settings: API keys and speech rate are stored in app-private DataStore.
+- Dictionary and translation: Merriam-Webster Learners API and DeepL use OkHttp with 15-second timeouts.
+- Offline pronunciation: sherpa-onnx native libraries are bundled in `app/src/main/jniLibs/arm64-v8a/`, and the default `vits-piper-en_US-amy-low` model is bundled in app assets.
+- Packaging target: ARM64-only for Xiaomi 14+ / modern Android phones. `armeabi-v7a`, `x86`, and `x86_64` packages are intentionally omitted.
+- TTS data: espeak resources are trimmed to English resources used by the bundled `en_US-amy-low` voice.
+
+The Android pronunciation fallback order is fixed:
+
+1. Merriam-Webster MP3 audio when available
+2. Local sherpa-onnx/Piper neural TTS
+3. Android system TTS
+
+On this machine, the Android SDK is at `/Users/zhaozeyi/Documents/Android/sdk`. `android-app/local.properties` points Gradle to that SDK. Android Studio is installed, and no separate global `gradle` command is required because the project includes Gradle Wrapper.

@@ -1,0 +1,5 @@
+# Copy this file to local.properties if Android Studio does not detect your SDK.
+# Do not commit local.properties because it is machine-specific.
+#
+# macOS default:
+# sdk.dir=/Users/your-name/Library/Android/sdk
