@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ViewGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -168,7 +170,7 @@ private fun MarkdownReader(
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { viewContext ->
-            TextView(viewContext).apply {
+            val textView = TextView(viewContext).apply {
                 textSize = 18f
                 setLineSpacing(4f, 1.05f)
                 setTextIsSelectable(false)
@@ -185,9 +187,24 @@ private fun MarkdownReader(
                     false
                 }
             }
+            ScrollView(viewContext).apply {
+                isFillViewport = true
+                addView(
+                    textView,
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
         },
-        update = { textView ->
-            markwon.setMarkdown(textView, markdown)
+        update = { scrollView ->
+            val textView = scrollView.getChildAt(0) as TextView
+            if (textView.tag != markdown) {
+                textView.tag = markdown
+                markwon.setMarkdown(textView, markdown)
+                scrollView.post { scrollView.scrollTo(0, 0) }
+            }
         }
     )
 }
