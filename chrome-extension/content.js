@@ -28,6 +28,9 @@
         isAllEnglish,
         isContextValid,
         isProbablyWord,
+        getFreshSelectionText,
+        getTextSelectionAction,
+        shouldHandleMouseSelectionRelease,
         dismissTranslatorUiOnOutsideEvent,
         dismissTranslatorUiOnFrameBlur,
         showSelectionToolbar
@@ -38,6 +41,67 @@
         handleWordLookupInteraction
     } = interactionController;
 
+    let mouseSelectionStart = null;
+    let lastHandledSelectionAt = 0;
+    let lastSelectedText = '';
+    let lastSelectionChangedAt = 0;
+
+    function rememberMouseSelectionStart(e) {
+        mouseSelectionStart = {
+            x: e.clientX,
+            y: e.clientY
+        };
+    }
+
+    function rememberSelectionText() {
+        const text = window.getSelection()?.toString().trim() || '';
+        if (!text) return;
+
+        lastSelectedText = text;
+        lastSelectionChangedAt = Date.now();
+    }
+
+    async function handleSelectedTextInteraction(e, delayMs, allowCachedSelection = false) {
+        setTimeout(async () => {
+            try {
+                if (Date.now() - lastHandledSelectionAt < 150) return;
+
+                const selection = window.getSelection();
+                const currentText = selection.toString().trim();
+                const text = allowCachedSelection
+                    ? getFreshSelectionText(currentText, lastSelectedText, lastSelectionChangedAt)
+                    : currentText;
+                const action = getTextSelectionAction(text);
+
+                if (e.target.id === 'translator-extension-host') return;
+                if (action === 'none') return;
+
+                lastHandledSelectionAt = Date.now();
+
+                if (action === 'word-lookup') {
+                    await handleWordLookupInteraction({
+                        word: text,
+                        x: e.clientX,
+                        y: e.clientY
+                    });
+                    return;
+                }
+
+                await showSelectionToolbar({
+                    text,
+                    x: e.clientX,
+                    y: e.clientY,
+                    onTranslate: (selectedText, x, y) => handleSelectionTranslation({
+                        text: selectedText,
+                        x,
+                        y
+                    })
+                });
+            } catch (err) {
+                console.error('[Translater] Selection interaction failed:', err);
+            }
+        }, delayMs);
+    }
 
     // Preload speech engine
     if (typeof speechSynthesis !== 'undefined') {
@@ -69,30 +133,27 @@
 
     // ==================== Floating Buttons (Shared via utils.js) ====================
 
+    document.addEventListener('selectionchange', rememberSelectionText);
+    document.addEventListener('mousedown', rememberMouseSelectionStart, true);
+
     document.addEventListener('mouseup', (e) => {
         if (!isContextValid()) return;
-        setTimeout(async () => {
-            try {
-                const selection = window.getSelection();
-                const text = selection.toString().trim();
+        const shouldHandleDragSelection = shouldHandleMouseSelectionRelease(mouseSelectionStart, {
+            x: e.clientX,
+            y: e.clientY,
+            detail: e.detail
+        });
+        mouseSelectionStart = null;
+        if (!shouldHandleDragSelection) return;
 
-                if (e.target.id === 'translator-extension-host') return;
-                if (!text || !isAllEnglish(text) || isProbablyWord(text)) return;
+        handleSelectedTextInteraction(e, 40, true);
+    }, true);
 
-                await showSelectionToolbar({
-                    text,
-                    x: e.clientX,
-                    y: e.clientY,
-                    onTranslate: (selectedText, x, y) => handleSelectionTranslation({
-                        text: selectedText,
-                        x,
-                        y
-                    })
-                });
-            } catch (err) {
-                console.error('[Translater] Mouseup event failed:', err);
-            }
-        }, 20);
+    document.addEventListener('mouseup', (e) => {
+        if (!isContextValid()) return;
+        if (e.detail > 1) return;
+        if (Date.now() - lastHandledSelectionAt < 200) return;
+        handleSelectedTextInteraction(e, 20);
     });
 
     // Dismissal

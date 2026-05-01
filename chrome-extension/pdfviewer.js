@@ -28,6 +28,7 @@ const {
     isAllEnglish,
     isProbablyWord,
     isContextValid,
+    getTextSelectionAction,
     dismissTranslatorUiOnOutsideEvent,
     dismissTranslatorUiOnFrameBlur,
     showSelectionToolbar,
@@ -629,11 +630,23 @@ viewer.addEventListener('dblclick', async (e) => {
 
 viewer.onmouseup = async (e) => {
     if (!isContextValid()) return;
+    if (e.detail > 1) return;
     setTimeout(async () => {
         try {
             const text = window.getSelection().toString().trim();
+            const action = getTextSelectionAction(text);
             if (e.target.id === 'translator-extension-host') return;
-            if (!text || !isAllEnglish(text) || isProbablyWord(text)) return;
+            if (action === 'none') return;
+            if (action === 'word-lookup') {
+                await handleWordLookupInteraction({
+                    word: text,
+                    x: e.clientX,
+                    y: e.clientY,
+                    popupWidth: Math.min(POPUP_WIDTH, window.innerWidth - 20),
+                    popupHeight: POPUP_HEIGHT
+                });
+                return;
+            }
             await showSelectionToolbar({
                 text,
                 x: e.clientX,

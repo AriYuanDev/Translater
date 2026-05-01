@@ -7,8 +7,11 @@ import {
     dismissTranslatorUiOnOutsideEvent,
     ensureShadowRoot,
     getShadowRoot,
+    getFreshSelectionText,
+    getTextSelectionAction,
     isTranslatorUiClickPath,
     setCurrentPopup,
+    shouldHandleMouseSelectionRelease,
     showSelectionToolbar
 } from '../chrome-extension/utils.js';
 import {
@@ -31,6 +34,29 @@ test.beforeEach(() => {
 test.afterEach(() => {
     __resetUiStateForTests();
     teardownDom(dom);
+});
+
+test('getTextSelectionAction routes selected words to lookup and multi-word text to toolbar', () => {
+    assert.equal(getTextSelectionAction('metamorphosis'), 'word-lookup');
+    assert.equal(getTextSelectionAction('The quick brown fox'), 'selection-toolbar');
+    assert.equal(getTextSelectionAction(''), 'none');
+    assert.equal(getTextSelectionAction('hello 世界'), 'none');
+});
+
+test('shouldHandleMouseSelectionRelease only allows drag selection releases', () => {
+    const start = { x: 100, y: 100 };
+
+    assert.equal(shouldHandleMouseSelectionRelease(start, { x: 102, y: 101, detail: 1 }), false);
+    assert.equal(shouldHandleMouseSelectionRelease(start, { x: 150, y: 100, detail: 2 }), false);
+    assert.equal(shouldHandleMouseSelectionRelease(start, { x: 150, y: 100, detail: 1 }), true);
+    assert.equal(shouldHandleMouseSelectionRelease(null, { x: 150, y: 100, detail: 1 }), false);
+});
+
+test('getFreshSelectionText falls back to a recent cached selection', () => {
+    assert.equal(getFreshSelectionText(' current ', 'cached', 1000, 1200), 'current');
+    assert.equal(getFreshSelectionText('', ' cached ', 1000, 1200), 'cached');
+    assert.equal(getFreshSelectionText('', 'cached', 1000, 1901), '');
+    assert.equal(getFreshSelectionText('', '', 1000, 1200), '');
 });
 
 test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPath recognizes its buttons', async () => {

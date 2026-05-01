@@ -41,6 +41,51 @@ export function isProbablyWord(text) {
     return /^[a-zA-Z0-9\-\']+$/.test(trimmed);
 }
 
+/**
+ * Routes selected text to the appropriate interaction surface.
+ * @param {string} text
+ * @returns {'none'|'word-lookup'|'selection-toolbar'}
+ */
+export function getTextSelectionAction(text) {
+    const trimmed = (text || '').trim();
+    if (!trimmed || !isAllEnglish(trimmed)) return 'none';
+    if (isProbablyWord(trimmed)) return 'word-lookup';
+    return 'selection-toolbar';
+}
+
+/**
+ * Determines whether a mouse release is likely the end of a drag selection.
+ * @param {{x:number,y:number}|null} start
+ * @param {{x:number,y:number,detail?:number}} end
+ * @returns {boolean}
+ */
+export function shouldHandleMouseSelectionRelease(start, end) {
+    if (!start || !end) return false;
+    if ((end.detail || 0) > 1) return false;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    return Math.hypot(dx, dy) >= 6;
+}
+
+/**
+ * Returns the live selection text, or a fresh cached selection if the page cleared it.
+ * @param {string} currentText
+ * @param {string} cachedText
+ * @param {number} cachedAt
+ * @param {number} [now=Date.now()]
+ * @param {number} [maxAgeMs=800]
+ * @returns {string}
+ */
+export function getFreshSelectionText(currentText, cachedText, cachedAt, now = Date.now(), maxAgeMs = 800) {
+    const current = (currentText || '').trim();
+    if (current) return current;
+
+    const cached = (cachedText || '').trim();
+    if (!cached) return '';
+    if (now - cachedAt > maxAgeMs) return '';
+    return cached;
+}
+
 // Create pronunciation icon SVG
 /**
  * Returns the SVG markup for the speaker icon.
