@@ -7,6 +7,8 @@ This is the Android v1 implementation for Translater. It is intentionally separa
 - Kotlin + Jetpack Compose Android app under `android-app/`.
 - MVI reader flow with `ReaderIntent`, `ReaderUiState`, and `ReaderEffect`.
 - Storage Access Framework file picker for `.md` / `.markdown` / plain text files.
+- Android **Open with** support for Markdown files through `ACTION_VIEW` intent filters.
+- Markdown Library for scanning device storage, searching files, sorting by recent/name/folder/size, grouping by folder, refreshing, and opening discovered Markdown files.
 - Markwon-based Markdown rendering.
 - Double-tap word lookup.
 - Merriam-Webster Learners Dictionary lookup and parser.
@@ -14,6 +16,7 @@ This is the Android v1 implementation for Translater. It is intentionally separa
 - DataStore settings for API keys and speech rate.
 - Built-in offline neural TTS path using sherpa-onnx and `vits-piper-en_US-amy-low`.
 - Fallback order: Merriam-Webster MP3, local AI TTS, Android system TTS.
+- Adaptive launcher icon with a dark background, blue rounded tile, and centered `MD` lettering.
 - Verified local debug APK build with bundled offline TTS assets.
 - Optimized for Xiaomi 14+ / modern ARM64 phones by packaging only `arm64-v8a` native libraries and English espeak data.
 
@@ -76,21 +79,34 @@ The debug APK is large because it bundles sherpa-onnx native libraries and the P
 
 The existing Android SDK is enough to build this project. Installing Android SDK Command-line Tools is only needed if you want to manage packages from the terminal with `sdkmanager`; it is not required for `./gradlew test` or `./gradlew assembleDebug`.
 
+## File access behavior
+
+The app has three Markdown entry paths:
+
+1. The normal file picker, which uses Android Storage Access Framework and does not require broad storage access.
+2. Android **Open with** from another app or file manager, which sends a Markdown `content://` or `file://` URI into `MainActivity`.
+3. Markdown Library scanning, which requires all-files access on Android 11+ because it walks external storage to discover every `.md` / `.markdown` file it can read.
+
+If the Markdown Library shows no scan permission, tap **Grant File Access**, approve the app in system settings, return to Translater, and tap **Refresh**.
+
 ## Manual acceptance
 
 1. Install debug APK on an Android device.
-2. Open a local Markdown file through the file picker.
-3. Double-tap an English word.
-4. Confirm the popup shows word, phonetic, definitions, translated definitions, and speak action.
-5. Turn off network and tap speak; pronunciation should fall back to bundled local AI TTS.
-6. Remove or corrupt the model assets in a debug build; the app should keep reading and fall back to Android system TTS.
+2. Confirm the launcher shows the centered `MD` icon.
+3. Open a local Markdown file through the file picker.
+4. Open a Markdown file from another app's **Open with** flow and confirm Translater is listed.
+5. Grant all-files access, tap **Refresh**, and confirm Markdown Library scan/search/sort/grouping works.
+6. Double-tap an English word.
+7. Confirm the popup shows word, phonetic, definitions, translated definitions, and speak action.
+8. Turn off network and tap speak; pronunciation should fall back to bundled local AI TTS.
+9. Remove or corrupt the model assets in a debug build; the app should keep reading and fall back to Android system TTS.
 
 ## Test coverage
 
 - `MerriamWebsterParserTest`: parser coverage for normal Learners Dictionary entries and suggestion-list misses.
 - `WordExtractorTest`: double-tap word boundary coverage for hyphenated words, apostrophes, and Chinese text.
 - `SpeechFallbackPolicyTest`: pronunciation source order coverage.
-- `ReaderReducerTest`: MVI state transition coverage for document loading and loaded states.
+- `ReaderReducerTest`: MVI state transition coverage for document loading, library scan state, and file sort state.
 
 ## Security notes
 

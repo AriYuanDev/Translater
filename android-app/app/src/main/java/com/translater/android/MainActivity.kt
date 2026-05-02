@@ -2,7 +2,10 @@ package com.translater.android
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ViewGroup
@@ -13,6 +16,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -46,12 +52,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.translater.android.data.MarkdownFileCandidate
 import com.translater.android.domain.AppSettings
 import com.translater.android.domain.DictionaryEntry
 import com.translater.android.domain.PreferredPronunciation
+import com.translater.android.reader.MarkdownSortMode
 import com.translater.android.reader.PopupState
 import com.translater.android.reader.ReaderEffect
 import com.translater.android.reader.ReaderIntent
@@ -59,22 +68,40 @@ import com.translater.android.reader.ReaderUiState
 import com.translater.android.reader.ReaderViewModel
 import com.translater.android.reader.WordExtractor
 import io.noties.markwon.Markwon
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private val externalMarkdownUri = mutableStateOf<Uri?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        externalMarkdownUri.value = intent.markdownUri()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    TranslaterApp()
+                    TranslaterApp(
+                        externalUri = externalMarkdownUri.value,
+                        onExternalUriConsumed = { externalMarkdownUri.value = null }
+                    )
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        externalMarkdownUri.value = intent.markdownUri()
+    }
 }
 
 @Composable
-private fun TranslaterApp() {
+private fun TranslaterApp(
+    externalUri: Uri?,
+    onExternalUriConsumed: () -> Unit
+) {
     val context = LocalContext.current
     val viewModel: ReaderViewModel = viewModel(
         factory = ReaderViewModel.Factory(context.applicationContext as Application)
@@ -88,11 +115,26 @@ private fun TranslaterApp() {
             viewModel.accept(ReaderIntent.FileSelected(uri))
         }
     }
+    val allFilesAccessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        viewModel.accept(ReaderIntent.RefreshMarkdownLibrary)
+    }
+
+    LaunchedEffect(externalUri) {
+        if (externalUri != null) {
+            persistReadPermissionIfAllowed(context.contentResolver, externalUri)
+            viewModel.accept(ReaderIntent.FileSelected(externalUri))
+            onExternalUriConsumed()
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
             when (effect) {
                 ReaderEffect.LaunchMarkdownPicker -> launcher.launch(arrayOf("text/markdown", "text/plain", "application/octet-stream"))
+                ReaderEffect.LaunchAllFilesAccessSettings -> {
+                    runCatching { allFilesAccessLauncher.launch(createAllFilesAccessIntent(context.packageName)) }
+                        .onFailure { Toast.makeText(context, "Unable to open file access settings", Toast.LENGTH_SHORT).show() }
+                }
                 is ReaderEffect.Toast -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 is ReaderEffect.Pronounced -> Unit
             }
@@ -114,8 +156,9 @@ private fun ReaderScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.documentTitle, maxLines = 1) },
+                title = { Text(if (state.isLibraryOpen) "Markdown Library" else state.documentTitle, maxLines = 1) },
                 actions = {
+                    TextButton(onClick = { onIntent(ReaderIntent.ToggleLibrary) }) { Text("Files") }
                     TextButton(onClick = { onIntent(ReaderIntent.OpenFile) }) { Text("Open") }
                     TextButton(onClick = { onIntent(ReaderIntent.ToggleSettings) }) { Text("Settings") }
                 }
@@ -134,8 +177,8 @@ private fun ReaderScreen(
             }
             if (state.isLoadingDocument) {
                 CircularProgressIndicator()
-            } else if (state.markdown.isBlank()) {
-                EmptyReader(onOpen = { onIntent(ReaderIntent.OpenFile) })
+            } else if (state.isLibraryOpen || state.markdown.isBlank()) {
+                ReaderHome(state = state, onIntent = onIntent)
             } else {
                 MarkdownReader(state.markdown, onIntent)
             }
@@ -152,10 +195,105 @@ private fun ReaderScreen(
 }
 
 @Composable
+private fun ReaderHome(
+    state: ReaderUiState,
+    onIntent: (ReaderIntent) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (state.markdown.isBlank()) {
+            EmptyReader(onOpen = { onIntent(ReaderIntent.OpenFile) })
+        }
+        MarkdownLibrary(state = state, onIntent = onIntent)
+    }
+}
+
+@Composable
 private fun EmptyReader(onOpen: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Open a Markdown file to start reading.")
         Button(onClick = onOpen) { Text("Open Markdown") }
+    }
+}
+
+@Composable
+private fun MarkdownLibrary(
+    state: ReaderUiState,
+    onIntent: (ReaderIntent) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onIntent(ReaderIntent.RefreshMarkdownLibrary) }) {
+                Text("Refresh")
+            }
+            Button(onClick = { onIntent(ReaderIntent.CycleMarkdownSort) }) {
+                Text("Sort: ${state.fileSortMode.label()}")
+            }
+        }
+
+        if (!state.hasWholeDeviceScanAccess) {
+            Text("Grant all files access to scan Markdown files across device storage.")
+            Button(onClick = { onIntent(ReaderIntent.RequestWholeDeviceScanAccess) }) {
+                Text("Grant File Access")
+            }
+        }
+
+        OutlinedTextField(
+            value = state.fileSearchQuery,
+            onValueChange = { onIntent(ReaderIntent.SearchMarkdownFiles(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search name or folder") }
+        )
+
+        if (state.isScanningFiles) {
+            CircularProgressIndicator()
+        }
+
+        val groupedFiles = remember(state.markdownFiles, state.fileSearchQuery, state.fileSortMode) {
+            groupedVisibleFiles(state)
+        }
+        Text("${groupedFiles.values.sumOf { it.size }} Markdown files")
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            groupedFiles.forEach { (folder, files) ->
+                item(key = "folder-$folder") {
+                    Text(folder, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                items(files, key = { it.path }) { file ->
+                    MarkdownFileRow(file = file, onClick = { onIntent(ReaderIntent.FileSelected(file.uri)) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownFileRow(
+    file: MarkdownFileCandidate,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp)
+    ) {
+        Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            "${formatModifiedTime(file.lastModified)} · ${android.text.format.Formatter.formatFileSize(context, file.sizeBytes)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary
+        )
     }
 }
 
@@ -334,4 +472,56 @@ private fun PronunciationChoice(label: String, selected: Boolean, onClick: () ->
     } else {
         TextButton(onClick = onClick) { Text(label) }
     }
+}
+
+private fun Intent.markdownUri(): Uri? {
+    return data?.takeIf { action == Intent.ACTION_VIEW }
+}
+
+private fun persistReadPermissionIfAllowed(contentResolver: android.content.ContentResolver, uri: Uri) {
+    runCatching {
+        contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+}
+
+private fun createAllFilesAccessIntent(packageName: String): Intent {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+            data = Uri.parse("package:$packageName")
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+    }
+}
+
+private fun groupedVisibleFiles(state: ReaderUiState): Map<String, List<MarkdownFileCandidate>> {
+    val query = state.fileSearchQuery.trim().lowercase()
+    val filtered = state.markdownFiles.filter { file ->
+        query.isBlank() ||
+            file.name.lowercase().contains(query) ||
+            file.folder.lowercase().contains(query) ||
+            file.path.lowercase().contains(query)
+    }
+    val sorted = when (state.fileSortMode) {
+        MarkdownSortMode.RECENT -> filtered.sortedWith(compareByDescending<MarkdownFileCandidate> { it.lastModified }.thenBy { it.name.lowercase() })
+        MarkdownSortMode.NAME -> filtered.sortedBy { it.name.lowercase() }
+        MarkdownSortMode.FOLDER -> filtered.sortedWith(compareBy<MarkdownFileCandidate> { it.folder.lowercase() }.thenBy { it.name.lowercase() })
+        MarkdownSortMode.SIZE -> filtered.sortedWith(compareByDescending<MarkdownFileCandidate> { it.sizeBytes }.thenBy { it.name.lowercase() })
+    }
+    return sorted.groupBy { it.folder }
+}
+
+private fun MarkdownSortMode.label(): String {
+    return when (this) {
+        MarkdownSortMode.RECENT -> "Recent"
+        MarkdownSortMode.NAME -> "Name"
+        MarkdownSortMode.FOLDER -> "Folder"
+        MarkdownSortMode.SIZE -> "Size"
+    }
+}
+
+private fun formatModifiedTime(lastModified: Long): String {
+    return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastModified))
 }

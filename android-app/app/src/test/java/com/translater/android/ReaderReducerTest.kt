@@ -1,5 +1,6 @@
 package com.translater.android
 
+import com.translater.android.reader.MarkdownSortMode
 import com.translater.android.reader.PopupState
 import com.translater.android.reader.ReaderMutation
 import com.translater.android.reader.ReaderReducer
@@ -32,7 +33,31 @@ class ReaderReducerTest {
         )
 
         assertFalse(next.isLoadingDocument)
+        assertFalse(next.isLibraryOpen)
         assertEquals("note.md", next.documentTitle)
         assertEquals("# Title", next.markdown)
+    }
+
+    @Test
+    fun fileLibraryLoadedStoresScanAccessAndFiles() {
+        val next = ReaderReducer.reduce(
+            ReaderUiState(isScanningFiles = true),
+            ReaderMutation.FileLibraryLoaded(emptyList(), hasAccess = true)
+        )
+
+        assertFalse(next.isScanningFiles)
+        assertTrue(next.hasWholeDeviceScanAccess)
+        assertEquals(emptyList<Any>(), next.markdownFiles)
+    }
+
+    @Test
+    fun fileSortModeCanChangeWithoutTouchingDocument() {
+        val next = ReaderReducer.reduce(
+            ReaderUiState(documentTitle = "note.md"),
+            ReaderMutation.FileSortModeChanged(MarkdownSortMode.FOLDER)
+        )
+
+        assertEquals("note.md", next.documentTitle)
+        assertEquals(MarkdownSortMode.FOLDER, next.fileSortMode)
     }
 }

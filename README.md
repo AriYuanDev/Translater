@@ -14,7 +14,8 @@ The Chrome extension is meant to be loaded with Chrome's **Load unpacked** flow 
 - **PDF reader**: Open PDFs in the custom viewer with lazy page rendering, outline sync, anchored zoom, and translation tools.
 - **Markdown reader**: Open Markdown files in the custom viewer with table of contents, HTML sanitization, relative path resolution, and translation tools.
 - **Shared UI stack**: Web pages, PDF, and Markdown surfaces reuse the same popup, floating toolbar, text-to-speech, and definition helpers.
-- **Android Markdown reader**: Open local Markdown files with Android's Storage Access Framework, render with Markwon, double-tap words for lookup, and pronounce words with bundled offline sherpa-onnx/Piper TTS fallback. The Android build is optimized for Xiaomi 14+ / modern ARM64 devices.
+- **Android Markdown reader**: Open local Markdown files with Android's Storage Access Framework or Android's **Open with** flow, render with Markwon, double-tap words for lookup, and pronounce words with bundled offline sherpa-onnx/Piper TTS fallback.
+- **Android Markdown library**: Scan device storage for `.md` / `.markdown` files after file-access approval, then search, sort, group by folder, refresh, and open files from inside the app. The Android build is optimized for Xiaomi 14+ / modern ARM64 devices.
 
 ## Repository Structure
 
@@ -61,6 +62,7 @@ Translater/
 - DeepL and Merriam-Webster host permissions are required for translation, dictionary lookup, and usage checks.
 - API keys are entered through the options page and stored in Chrome extension storage on your machine.
 - Android API keys are stored in app-private DataStore and are not shown after saving.
+- Android whole-device Markdown scanning requires user-granted all-files access on Android 11+; the normal file picker and external **Open with** flow still work without that broad scan permission.
 - Rendered Markdown is sanitized before it is inserted into the custom viewer.
 - Android Markdown is rendered natively; the Android app does not use a WebView bridge.
 
@@ -72,6 +74,7 @@ Translater/
 - Markdown viewer logic lives in `chrome-extension/mdviewer.js`.
 - Background routing and API orchestration live in `chrome-extension/background.js`.
 - Vendored third-party browser assets keep their upstream license headers in the checked-in files.
+- Android launcher icons live in `android-app/app/src/main/res/drawable/` and `android-app/app/src/main/res/mipmap-anydpi-v26/`.
 - Android offline pronunciation assets live under `android-app/app/src/main/jniLibs/` and `android-app/app/src/main/assets/vits-piper-en_US-amy-low/`.
 - Android native packaging is intentionally `arm64-v8a` only; add more ABI folders only if emulator or older-device support becomes a product requirement.
 - The checked-in Android debug APK is not required; rebuild it with `./gradlew assembleDebug`.

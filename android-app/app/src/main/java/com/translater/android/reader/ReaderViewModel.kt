@@ -52,12 +52,18 @@ class ReaderViewModel(
                 }
             }
         }
+        refreshMarkdownLibrary(showPermissionToast = false)
     }
 
     fun accept(intent: ReaderIntent) {
         when (intent) {
             ReaderIntent.OpenFile -> emitEffect(ReaderEffect.LaunchMarkdownPicker)
             is ReaderIntent.FileSelected -> loadMarkdown(intent)
+            ReaderIntent.ToggleLibrary -> mutate(ReaderMutation.LibraryToggled)
+            ReaderIntent.RefreshMarkdownLibrary -> refreshMarkdownLibrary(showPermissionToast = true)
+            ReaderIntent.RequestWholeDeviceScanAccess -> emitEffect(ReaderEffect.LaunchAllFilesAccessSettings)
+            is ReaderIntent.SearchMarkdownFiles -> mutate(ReaderMutation.FileSearchChanged(intent.query))
+            ReaderIntent.CycleMarkdownSort -> cycleMarkdownSort()
             is ReaderIntent.LookupWord -> lookupWord(intent)
             is ReaderIntent.SpeakWord -> speak(intent)
             ReaderIntent.DismissPopup -> mutate(ReaderMutation.PopupChanged(null))
@@ -73,6 +79,40 @@ class ReaderViewModel(
                 emitEffect(ReaderEffect.Toast("Dictionary cache cleared"))
             }
         }
+    }
+
+    private fun refreshMarkdownLibrary(showPermissionToast: Boolean) {
+        viewModelScope.launch {
+            val hasAccess = markdownRepository.hasWholeDeviceScanAccess()
+            if (!hasAccess) {
+                mutate(ReaderMutation.FileLibraryLoaded(emptyList(), hasAccess = false))
+                if (showPermissionToast) {
+                    effects.send(ReaderEffect.Toast("Grant all files access to scan Markdown files"))
+                }
+                return@launch
+            }
+
+            mutate(ReaderMutation.FileLibraryLoading(hasAccess = true))
+            runCatching { markdownRepository.scanMarkdownFiles() }
+                .onSuccess { files ->
+                    mutate(ReaderMutation.FileLibraryLoaded(files, hasAccess = true))
+                    effects.send(ReaderEffect.Toast("Found ${files.size} Markdown files"))
+                }
+                .onFailure { error ->
+                    mutate(ReaderMutation.FileLibraryLoaded(emptyList(), hasAccess = true))
+                    mutate(ReaderMutation.DocumentFailed(error.message ?: "Unable to scan Markdown files"))
+                }
+        }
+    }
+
+    private fun cycleMarkdownSort() {
+        val next = when (mutableState.value.fileSortMode) {
+            MarkdownSortMode.RECENT -> MarkdownSortMode.NAME
+            MarkdownSortMode.NAME -> MarkdownSortMode.FOLDER
+            MarkdownSortMode.FOLDER -> MarkdownSortMode.SIZE
+            MarkdownSortMode.SIZE -> MarkdownSortMode.RECENT
+        }
+        mutate(ReaderMutation.FileSortModeChanged(next))
     }
 
     private fun loadMarkdown(intent: ReaderIntent.FileSelected) {

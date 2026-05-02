@@ -72,7 +72,13 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 ## Android Reader Tests
 
 - Install the debug APK on a device or emulator.
+- Confirm the launcher shows the blue `MD` app icon and that the letters are visually centered.
 - Open a local `.md` or `.markdown` file through the app file picker.
+- From a file manager or another app, open a `.md` / `.markdown` file and confirm Translater appears in Android's **Open with** choices and loads the file.
+- On Android 11+, tap **Grant File Access**, approve all-files access, return to the app, and tap **Refresh**.
+- Confirm the Markdown Library lists discovered `.md` / `.markdown` files, groups them by folder, and updates the count after refresh.
+- Search by file name, folder, or path and confirm the visible file list narrows correctly.
+- Cycle sorting through Recent, Name, Folder, and Size, then open a file from the library.
 - Confirm Markdown headings, lists, links, and code blocks render legibly.
 - Double-tap an English word and confirm the lookup popup appears.
 - Confirm the popup shows word, phonetic text when available, part of speech, English definitions, Chinese definition translations, and a speak action.
