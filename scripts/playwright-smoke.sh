@@ -100,7 +100,7 @@ cleanup() {
 
 run_cli_checked() {
     local output=""
-    if ! output="$(node "$PLAYWRIGHT_CLI_JS" --config "$CONFIG_PATH" "$@" 2>&1)"; then
+    if ! output="$(node "$PLAYWRIGHT_CLI_JS" "$@" 2>&1)"; then
         printf '%s\n' "$output"
         return 1
     fi
@@ -110,6 +110,10 @@ run_cli_checked() {
     if printf '%s\n' "$output" | rg -q '^### Error$'; then
         return 1
     fi
+}
+
+run_cli_with_config_checked() {
+    run_cli_checked --config "$CONFIG_PATH" "$@"
 }
 
 require_command npx
@@ -166,7 +170,7 @@ echo "Running Playwright smoke test against $WEB_URL"
 echo "Browser: $BROWSER_EXECUTABLE"
 echo "Artifacts: $ARTIFACTS_DIR"
 
-run_cli_checked open "$WEB_URL"
+run_cli_with_config_checked open "$WEB_URL"
 run_cli_checked run-code --filename="$FLOW_PATH"
 
 echo "Playwright smoke test passed."

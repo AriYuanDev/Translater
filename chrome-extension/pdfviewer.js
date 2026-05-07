@@ -1,4 +1,8 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
+import {
+    ReadbackOptimizedCanvasFactory,
+    getReadbackOptimizedCanvasContext
+} from './pdf-canvas-factory.js';
 
 /**
  * Translater PDF Reader Script
@@ -43,6 +47,7 @@ const {
 // PDF.js configuration
 const pdfjsLib = await import('./pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+const pdfCanvasFactory = new ReadbackOptimizedCanvasFactory();
 
 // State variables
 let pdfDoc = null;
@@ -382,6 +387,7 @@ async function loadPdf(url) {
             data: pdfData,
             cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
             cMapPacked: true,
+            canvasFactory: pdfCanvasFactory,
         });
 
         pdfDoc = await loadingTask.promise;
@@ -467,12 +473,13 @@ async function renderPageContent(pageNum, container) {
         container.innerHTML = '';
 
         const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width * window.devicePixelRatio;
-        canvas.height = viewport.height * window.devicePixelRatio;
+        const outputScale = window.devicePixelRatio || 1;
+        canvas.width = viewport.width * outputScale;
+        canvas.height = viewport.height * outputScale;
         canvas.style.width = viewport.width + 'px';
         canvas.style.height = viewport.height + 'px';
-        context.scale(window.devicePixelRatio, window.devicePixelRatio);
+        const context = getReadbackOptimizedCanvasContext(canvas);
+        context.scale(outputScale, outputScale);
         container.appendChild(canvas);
 
         const textLayer = document.createElement('div');

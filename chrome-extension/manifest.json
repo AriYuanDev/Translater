@@ -61,6 +61,7 @@
         "viewer-sidebar.js",
         "viewer-routing.js",
         "viewer-sidebar-helpers.js",
+        "pdf-canvas-factory.js",
         "markdown-helpers.js",
         "interaction-controller.js",
         "marked.min.js",
