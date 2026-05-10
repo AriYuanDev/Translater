@@ -15,6 +15,7 @@ The Chrome extension is meant to be loaded with Chrome's **Load unpacked** flow 
 - **Markdown reader**: Open Markdown files in the custom viewer with table of contents, HTML sanitization, relative path resolution, and translation tools.
 - **Shared UI stack**: Web pages, PDF, and Markdown surfaces reuse the same popup, floating toolbar, text-to-speech, and definition helpers.
 - **Android Markdown reader**: Open local Markdown files with Android's Storage Access Framework or Android's **Open with** flow, render with Markwon, double-tap words for lookup, and pronounce words with bundled offline sherpa-onnx/Piper TTS fallback.
+- **Android Process Text**: Select one English word in supported third-party apps and use **Translate & Speak** from Android's text-selection menu to open Translater for lookup and pronunciation.
 - **Android Markdown library**: Scan device storage for `.md` / `.markdown` files after file-access approval, then search, sort, group by folder, refresh, and open files from inside the app. The Android build is optimized for Xiaomi 14+ / modern ARM64 devices.
 
 ## Repository Structure

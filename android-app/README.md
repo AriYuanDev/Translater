@@ -89,6 +89,12 @@ The app has three Markdown entry paths:
 
 If the Markdown Library shows no scan permission, tap **Grant File Access**, approve the app in system settings, return to Translater, and tap **Refresh**.
 
+## Process Text entry
+
+The app also registers Android's standard `ACTION_PROCESS_TEXT` handler. In third-party apps that use the platform text-selection menu, selecting one English word can show **Translate & Speak**. Tapping it launches Translater, runs the same lookup path used by double-tap in the Markdown reader, and starts pronunciation through the existing Merriam-Webster / local AI / system TTS fallback chain.
+
+This is a user-triggered Android selection action, not a global overlay or background listener. Apps with custom text controls, protected fields, browsers, games, or PDF surfaces may not expose the menu item.
+
 ## Manual acceptance
 
 1. Install debug APK on an Android device.
@@ -98,13 +104,16 @@ If the Markdown Library shows no scan permission, tap **Grant File Access**, app
 5. Grant all-files access, tap **Refresh**, and confirm Markdown Library scan/search/sort/grouping works.
 6. Double-tap an English word.
 7. Confirm the popup shows word, phonetic, definitions, translated definitions, and speak action.
-8. Turn off network and tap speak; pronunciation should fall back to bundled local AI TTS.
-9. Remove or corrupt the model assets in a debug build; the app should keep reading and fall back to Android system TTS.
+8. In another Android app, select one English word and confirm **Translate & Speak** appears in the text-selection menu where the host app supports Android Process Text.
+9. Tap **Translate & Speak** and confirm Translater opens the lookup popup and pronounces the selected word.
+10. Turn off network and tap speak; pronunciation should fall back to bundled local AI TTS.
+11. Remove or corrupt the model assets in a debug build; the app should keep reading and fall back to Android system TTS.
 
 ## Test coverage
 
 - `MerriamWebsterParserTest`: parser coverage for normal Learners Dictionary entries and suggestion-list misses.
 - `WordExtractorTest`: double-tap word boundary coverage for hyphenated words, apostrophes, and Chinese text.
+- `ProcessTextRequestTest`: selected-text normalization coverage for the Android Process Text entry.
 - `SpeechFallbackPolicyTest`: pronunciation source order coverage.
 - `ReaderReducerTest`: MVI state transition coverage for document loading, library scan state, and file sort state.
 

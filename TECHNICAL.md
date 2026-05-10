@@ -87,6 +87,7 @@ Dictionary popups now use popup identity checks so older async responses cannot 
 - UI stack: Kotlin, Jetpack Compose, Material 3, and MVI state flow.
 - Reader: Android Storage Access Framework opens local Markdown files without broad filesystem permission.
 - File association: `MainActivity` declares `ACTION_VIEW` filters for common Markdown/text MIME types plus `.md` / `.markdown` paths, so external file managers can offer Translater in Android's **Open with** sheet.
+- Process Text: `ProcessTextActivity` declares `ACTION_PROCESS_TEXT` with `text/plain`, so Android text-selection menus can offer **Translate & Speak** in third-party apps that expose the platform selection action. The activity normalizes one selected English word, launches `MainActivity`, and reuses `ReaderIntent.LookupWord`.
 - Markdown library: after all-files access is granted, `MarkdownFileRepository` walks external storage for `.md` / `.markdown` files. The app keeps the scan in MVI state, then filters, sorts, groups by folder, refreshes, and opens selected file URIs through the same reader path.
 - Rendering: Markwon renders Markdown into a native `TextView`.
 - Lookup: double-tap maps the touch position to a character offset, extracts an English word, then sends `ReaderIntent.LookupWord`.

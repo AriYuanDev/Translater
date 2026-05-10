@@ -13,7 +13,8 @@
         android:theme="@style/AppTheme">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -48,6 +49,19 @@
                 <data android:scheme="file" />
                 <data android:pathPattern=".*\\.md" />
                 <data android:pathPattern=".*\\.markdown" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ProcessTextActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/process_text_action_label"
+            android:noHistory="true"
+            android:theme="@style/ProcessTextTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>

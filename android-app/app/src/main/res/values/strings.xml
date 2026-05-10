@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Translater</string>
+    <string name="process_text_action_label">Translate &amp; Speak</string>
 </resources>

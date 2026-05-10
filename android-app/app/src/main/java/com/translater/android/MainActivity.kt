@@ -74,16 +74,20 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val externalMarkdownUri = mutableStateOf<Uri?>(null)
+    private val externalLookupWord = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         externalMarkdownUri.value = intent.markdownUri()
+        externalLookupWord.value = ProcessTextRequest.lookupWordFromInternalIntent(intent)
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TranslaterApp(
                         externalUri = externalMarkdownUri.value,
-                        onExternalUriConsumed = { externalMarkdownUri.value = null }
+                        externalLookupWord = externalLookupWord.value,
+                        onExternalUriConsumed = { externalMarkdownUri.value = null },
+                        onExternalLookupConsumed = { externalLookupWord.value = null }
                     )
                 }
             }
@@ -94,13 +98,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         externalMarkdownUri.value = intent.markdownUri()
+        externalLookupWord.value = ProcessTextRequest.lookupWordFromInternalIntent(intent)
     }
 }
 
 @Composable
 private fun TranslaterApp(
     externalUri: Uri?,
-    onExternalUriConsumed: () -> Unit
+    externalLookupWord: String?,
+    onExternalUriConsumed: () -> Unit,
+    onExternalLookupConsumed: () -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: ReaderViewModel = viewModel(
@@ -124,6 +131,13 @@ private fun TranslaterApp(
             persistReadPermissionIfAllowed(context.contentResolver, externalUri)
             viewModel.accept(ReaderIntent.FileSelected(externalUri))
             onExternalUriConsumed()
+        }
+    }
+
+    LaunchedEffect(externalLookupWord) {
+        if (externalLookupWord != null) {
+            viewModel.accept(ReaderIntent.LookupWord(externalLookupWord, 0f, 0f))
+            onExternalLookupConsumed()
         }
     }
 

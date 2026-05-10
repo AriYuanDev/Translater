@@ -82,6 +82,9 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 - Confirm Markdown headings, lists, links, and code blocks render legibly.
 - Double-tap an English word and confirm the lookup popup appears.
 - Confirm the popup shows word, phonetic text when available, part of speech, English definitions, Chinese definition translations, and a speak action.
+- In a third-party Android app with standard text selection, select one English word and confirm **Translate & Speak** appears in the selection menu or overflow menu.
+- Tap **Translate & Speak** and confirm Translater opens the lookup popup and pronounces the selected word.
+- Select multi-word or non-English text and confirm Translater does not try to run a word lookup.
 - Configure Merriam-Webster and DeepL keys in the settings sheet and confirm lookup uses dictionary results before DeepL fallback.
 - Clear or omit keys and confirm the app shows a readable configuration error instead of crashing.
 
