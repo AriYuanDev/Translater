@@ -28,7 +28,7 @@ The Chrome extension is built around these runtime surfaces:
 
 `chrome-extension/interaction-controller.js` now owns the async popup lifecycle so `content.js`, `pdfviewer.js`, and `mdviewer.js` only keep event wiring and surface-specific sizing.
 
-`chrome-extension/viewer-routing.js`, `chrome-extension/viewer-sidebar-helpers.js`, and `chrome-extension/markdown-helpers.js` hold the pure routing, sidebar parsing, and Markdown helper logic that is reused by runtime code and tests.
+`chrome-extension/viewer-routing.js`, `chrome-extension/viewer-sidebar-helpers.js`, `chrome-extension/viewer-zoom-helpers.js`, and `chrome-extension/markdown-helpers.js` hold the pure routing, sidebar parsing, zoom-state, and Markdown helper logic that is reused by runtime code and tests.
 
 ## Background Flow
 
@@ -55,6 +55,7 @@ Dictionary popups now use popup identity checks so older async responses cannot 
 - fetches PDF bytes before handing them to PDF.js
 - handles local `file://` PDFs more predictably
 - preserves zoom anchor while rerendering
+- reads explicit viewer zoom from the URL and carries the current zoom into sidebar document links
 - keeps outline state synced with the viewport
 - reuses shared translation helpers from `utils.js`
 
@@ -66,7 +67,17 @@ Dictionary popups now use popup identity checks so older async responses cannot 
 - sanitizes rendered HTML before injecting it into the viewer
 - rewrites relative image and link paths against the source URL
 - builds a TOC from rendered headings
+- defaults to 100% zoom when the URL has no explicit viewer zoom state
+- preserves the viewport center while zooming and carries the current zoom into sidebar document links
 - reuses the shared translation helpers from `utils.js`
+
+## Viewer Sidebar and Zoom State
+
+The PDF and Markdown viewers share `viewer-sidebar.js` for the file panel. Directory HTML is parsed without sorting so the sidebar follows the browser's directory listing order. The panel can enter child folders, move one level up with the parent directory control, and return to the current document folder.
+
+Document links are built with `viewer-routing.js`, which can append viewer-state parameters after the encoded source URL. The sidebar adds `sidebar=open` when the panel is open and includes explicit zoom state so PDF and Markdown preserve the current reading scale when switching documents.
+
+`viewer-zoom-helpers.js` treats missing zoom values as absent rather than numeric zero. This keeps direct Markdown opens at 100% while still allowing explicit zoom values, including 60%, to be restored when they are intentionally passed with `zoomExplicit=1`.
 
 ## Security Notes
 

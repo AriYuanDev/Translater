@@ -3,13 +3,14 @@ import {
     createDocumentEntry,
     getDirectoryLabel,
     getDirectoryUrl,
+    getParentDirectoryUrl,
     normalizeUrl,
-    parseDirectoryDocuments,
+    parseDirectoryItems,
     shouldFallbackToCurrentDocument
 } from './viewer-sidebar-helpers.js';
 
-async function loadSiblingDocuments(currentUrl) {
-    const directoryUrl = getDirectoryUrl(currentUrl);
+async function loadDirectoryDocuments(currentUrl, targetDirectoryUrl = getDirectoryUrl(currentUrl)) {
+    const directoryUrl = normalizeUrl(targetDirectoryUrl);
     if (!directoryUrl) {
         throw new Error('Unable to resolve parent directory');
     }
@@ -24,41 +25,116 @@ async function loadSiblingDocuments(currentUrl) {
     return {
         directoryUrl,
         directoryLabel: getDirectoryLabel(directoryUrl),
-        documents: parseDirectoryDocuments(directoryUrl, html, currentUrl)
+        documents: parseDirectoryItems(directoryUrl, html, currentUrl)
     };
 }
 
-function renderEmptyState(container, message) {
-    container.innerHTML = '';
+function appendEmptyState(container, message) {
     const empty = document.createElement('div');
     empty.className = 'sidebar-empty';
     empty.textContent = message;
     container.appendChild(empty);
 }
 
-function renderDocumentList(container, documents, currentUrl) {
+function renderEmptyState(container, message) {
+    container.innerHTML = '';
+    appendEmptyState(container, message);
+}
+
+function renderDirectoryNavigation(container, {
+    activeDirectoryUrl,
+    currentDirectoryUrl,
+    onDirectoryChange
+}) {
+    const parentDirectoryUrl = getParentDirectoryUrl(activeDirectoryUrl);
+    const isCurrentDirectory = normalizeUrl(activeDirectoryUrl) === normalizeUrl(currentDirectoryUrl);
+    if (!parentDirectoryUrl && isCurrentDirectory) return;
+
+    const nav = document.createElement('div');
+    nav.className = 'folder-nav';
+
+    if (parentDirectoryUrl) {
+        const parentButton = document.createElement('button');
+        parentButton.type = 'button';
+        parentButton.className = 'folder-nav-button';
+        parentButton.dataset.directoryAction = 'parent';
+        parentButton.textContent = 'Parent';
+        parentButton.title = parentDirectoryUrl;
+        parentButton.addEventListener('click', () => onDirectoryChange(parentDirectoryUrl));
+        nav.appendChild(parentButton);
+    }
+
+    if (!isCurrentDirectory) {
+        const currentButton = document.createElement('button');
+        currentButton.type = 'button';
+        currentButton.className = 'folder-nav-button';
+        currentButton.dataset.directoryAction = 'current';
+        currentButton.textContent = 'Current';
+        currentButton.title = currentDirectoryUrl;
+        currentButton.addEventListener('click', () => onDirectoryChange(currentDirectoryUrl));
+        nav.appendChild(currentButton);
+    }
+
+    container.appendChild(nav);
+}
+
+function renderDocumentList(container, documents, currentUrl, {
+    activeDirectoryUrl = getDirectoryUrl(currentUrl),
+    currentDirectoryUrl = getDirectoryUrl(currentUrl),
+    onDirectoryChange = () => {},
+    getViewerStateParams = () => ({}),
+    sidebar = null,
+    emptyMessage = 'No PDF or Markdown files found in this folder.'
+} = {}) {
     const normalizedCurrentUrl = normalizeUrl(currentUrl);
     container.innerHTML = '';
+    renderDirectoryNavigation(container, {
+        activeDirectoryUrl,
+        currentDirectoryUrl,
+        onDirectoryChange
+    });
 
     if (!documents.length) {
-        renderEmptyState(container, 'No PDF or Markdown files found in this folder.');
+        appendEmptyState(container, emptyMessage);
         return;
     }
 
     documents.forEach(documentEntry => {
         const link = document.createElement('a');
-        const isCurrent = documentEntry.url === normalizedCurrentUrl;
+        const isDirectory = documentEntry.type === 'directory';
+        const isCurrent = !isDirectory && documentEntry.url === normalizedCurrentUrl;
         const fileMain = document.createElement('div');
         const fileName = document.createElement('span');
         const fileBadge = document.createElement('span');
 
         link.className = 'file-item';
+        if (isDirectory) {
+            link.classList.add('folder-item');
+        }
         if (isCurrent) {
             link.classList.add('active');
             link.setAttribute('aria-current', 'page');
         }
 
-        link.href = createViewerUrlForDocument(documentEntry.url, value => chrome.runtime.getURL(value));
+        const updateHref = () => {
+            const stateParams = {
+                ...getViewerStateParams()
+            };
+            if (sidebar?.classList?.contains('open')) {
+                stateParams.sidebar = 'open';
+            }
+            link.href = createViewerUrlForDocument(
+                documentEntry.url,
+                value => chrome.runtime.getURL(value),
+                stateParams
+            );
+        };
+
+        if (isDirectory) {
+            link.href = '#';
+        } else {
+            updateHref();
+        }
         link.target = '_self';
         link.title = documentEntry.name;
 
@@ -76,20 +152,27 @@ function renderDocumentList(container, documents, currentUrl) {
             link.addEventListener('click', event => {
                 event.preventDefault();
             });
+        } else if (isDirectory) {
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                onDirectoryChange(documentEntry.url);
+            });
+        } else {
+            link.addEventListener('click', updateHref);
         }
 
         container.appendChild(link);
     });
 }
 
-function renderCurrentDocumentFallback(container, currentUrl) {
+function renderCurrentDocumentFallback(container, currentUrl, options = {}) {
     const currentEntry = createDocumentEntry(currentUrl);
     if (!currentEntry) {
         renderEmptyState(container, 'Only the current file is available.');
         return;
     }
 
-    renderDocumentList(container, [currentEntry], currentUrl);
+    renderDocumentList(container, [currentEntry], currentUrl, options);
 }
 
 function getLoadErrorMessage(currentUrl, error) {
@@ -111,10 +194,14 @@ export function setupViewerSidebar({
     sidebarToggle,
     fileBrowserContainer,
     sidebarFolderName,
-    defaultPanel = 'files'
+    defaultPanel = 'files',
+    getViewerStateParams = () => ({})
 }) {
     const tabButtons = Array.from(sidebar.querySelectorAll('[data-sidebar-panel]'));
     const panels = Array.from(sidebar.querySelectorAll('.sidebar-panel'));
+    const currentDirectoryUrl = normalizeUrl(getDirectoryUrl(currentUrl));
+    let activeDirectoryUrl = currentDirectoryUrl;
+    let loadRequestId = 0;
 
     const setActivePanel = (panelName) => {
         tabButtons.forEach(button => {
@@ -136,31 +223,68 @@ export function setupViewerSidebar({
         viewerContainer.classList.toggle('sidebar-open');
     });
 
-    setActivePanel(defaultPanel);
-    renderEmptyState(fileBrowserContainer, 'Loading sibling documents...');
+    if (new URLSearchParams(window.location.search).get('sidebar') === 'open') {
+        sidebar.classList.add('open');
+        viewerContainer.classList.add('sidebar-open');
+    }
 
-    loadSiblingDocuments(currentUrl).then(({ directoryUrl, directoryLabel, documents }) => {
-        if (sidebarFolderName) {
-            sidebarFolderName.textContent = directoryLabel;
-            sidebarFolderName.title = directoryUrl;
-        }
-        renderDocumentList(fileBrowserContainer, documents, currentUrl);
-    }).catch(error => {
-        if (shouldFallbackToCurrentDocument(error)) {
+    setActivePanel(defaultPanel);
+
+    const openDirectory = (targetDirectoryUrl) => {
+        const requestId = ++loadRequestId;
+        activeDirectoryUrl = normalizeUrl(targetDirectoryUrl || currentDirectoryUrl);
+        renderEmptyState(fileBrowserContainer, 'Loading sibling documents...');
+
+        loadDirectoryDocuments(currentUrl, activeDirectoryUrl).then(({ directoryUrl, directoryLabel, documents }) => {
+            if (requestId !== loadRequestId) return;
+            activeDirectoryUrl = directoryUrl;
             if (sidebarFolderName) {
-                const directoryUrl = getDirectoryUrl(currentUrl);
-                sidebarFolderName.textContent = getDirectoryLabel(directoryUrl);
+                sidebarFolderName.textContent = directoryLabel;
                 sidebarFolderName.title = directoryUrl;
             }
-            renderCurrentDocumentFallback(fileBrowserContainer, currentUrl);
-            return;
-        }
+            renderDocumentList(fileBrowserContainer, documents, currentUrl, {
+                activeDirectoryUrl,
+                currentDirectoryUrl,
+                onDirectoryChange: openDirectory,
+                getViewerStateParams,
+                sidebar
+            });
+        }).catch(error => {
+            if (requestId !== loadRequestId) return;
 
-        console.error('Failed to load sibling documents:', error);
-        if (sidebarFolderName) {
-            sidebarFolderName.textContent = 'Current Folder';
-            sidebarFolderName.title = '';
-        }
-        renderEmptyState(fileBrowserContainer, getLoadErrorMessage(currentUrl, error));
-    });
+            if (
+                shouldFallbackToCurrentDocument(error) &&
+                normalizeUrl(activeDirectoryUrl) === normalizeUrl(currentDirectoryUrl)
+            ) {
+                if (sidebarFolderName) {
+                    sidebarFolderName.textContent = getDirectoryLabel(currentDirectoryUrl);
+                    sidebarFolderName.title = currentDirectoryUrl;
+                }
+                renderCurrentDocumentFallback(fileBrowserContainer, currentUrl, {
+                    activeDirectoryUrl,
+                    currentDirectoryUrl,
+                    onDirectoryChange: openDirectory,
+                    getViewerStateParams,
+                    sidebar
+                });
+                return;
+            }
+
+            console.error('Failed to load sibling documents:', error);
+            if (sidebarFolderName) {
+                sidebarFolderName.textContent = activeDirectoryUrl ? getDirectoryLabel(activeDirectoryUrl) : 'Current Folder';
+                sidebarFolderName.title = activeDirectoryUrl || '';
+            }
+            renderDocumentList(fileBrowserContainer, [], currentUrl, {
+                activeDirectoryUrl,
+                currentDirectoryUrl,
+                onDirectoryChange: openDirectory,
+                getViewerStateParams,
+                sidebar,
+                emptyMessage: getLoadErrorMessage(currentUrl, error)
+            });
+        });
+    };
+
+    openDirectory(currentDirectoryUrl);
 }

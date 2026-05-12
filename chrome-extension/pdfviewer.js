@@ -1,4 +1,10 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
+import { resetCurrentTabBrowserZoom } from './viewer-browser-zoom.js';
+import {
+    createZoomStateParams,
+    getExplicitZoomParam,
+    getClampedZoomPercent
+} from './viewer-zoom-helpers.js';
 import {
     ReadbackOptimizedCanvasFactory,
     getReadbackOptimizedCanvasContext
@@ -49,9 +55,22 @@ const pdfjsLib = await import('./pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 const pdfCanvasFactory = new ReadbackOptimizedCanvasFactory();
 
+// Constants
+const DEFAULT_SCALE = 1.9;
+const ZOOM_STEP = 0.25;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4.0;
+const POPUP_WIDTH = 760;
+const POPUP_HEIGHT = 260;
+const SENTENCE_POPUP_WIDTH = 420;
+const SENTENCE_POPUP_HEIGHT = 180;
+const DEFAULT_ZOOM = Math.round(DEFAULT_SCALE * 100);
+const initialViewerParams = new URLSearchParams(window.location.search);
+const initialZoomParam = getExplicitZoomParam(initialViewerParams);
+
 // State variables
 let pdfDoc = null;
-let currentScale = 1.0;
+let currentScale = getInitialScale();
 let renderedPages = new Map();
 const outlineEntries = [];
 let activeOutlineIndex = -1;
@@ -71,20 +90,19 @@ const sidebarFolderName = document.getElementById('sidebarFolderName');
 const prevPageButton = document.getElementById('prevPage');
 const nextPageButton = document.getElementById('nextPage');
 
-// Constants
-const DEFAULT_SCALE = 1.9;
-const ZOOM_STEP = 0.25;
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 4.0;
-const POPUP_WIDTH = 760;
-const POPUP_HEIGHT = 260;
-const SENTENCE_POPUP_WIDTH = 420;
-const SENTENCE_POPUP_HEIGHT = 180;
-
 let pageObserver = null;
 const textLayerEndDivs = new Map();
 let textLayerSelectionAbortController = null;
 let previousSelectionRange = null;
+
+function getInitialScale() {
+    return getClampedZoomPercent(
+        initialZoomParam,
+        DEFAULT_ZOOM,
+        Math.round(MIN_SCALE * 100),
+        Math.round(MAX_SCALE * 100)
+    ) / 100;
+}
 
 function normalizeClipboardText(text) {
     return pdfjsLib.normalizeUnicode(String(text || '').replace(/\u0000/g, ''));
@@ -398,7 +416,7 @@ async function loadPdf(url) {
         document.title = filename;
 
         await renderOutline();
-        currentScale = 1.9; // Default 190%
+        currentScale = getInitialScale();
         updateZoomLevel();
         await renderAllPages();
         showLoading(false);
@@ -701,13 +719,17 @@ function showError(message) {
 
 const url = getPdfUrl();
 if (url) {
+    resetCurrentTabBrowserZoom();
     setupViewerSidebar({
         currentUrl: url,
         sidebar,
         viewerContainer,
         sidebarToggle,
         fileBrowserContainer,
-        sidebarFolderName
+        sidebarFolderName,
+        getViewerStateParams: () => createZoomStateParams(currentScale * 100, {
+            defaultZoom: DEFAULT_ZOOM
+        })
     });
     loadPdf(url);
 } else {

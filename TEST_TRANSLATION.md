@@ -20,6 +20,7 @@ This checklist covers the Chrome extension and the Android app. Run the relevant
 - PDF file: `manual-tests/viewer-smoke.pdf`
 
 Open these local files directly in Chrome after enabling file URL access. Keeping all test documents in the same folder makes the sidebar file list deterministic for Markdown and PDF smoke tests.
+For folder navigation checks, also test against any local folder that contains at least one child folder with a `.md`, `.markdown`, or `.pdf` file.
 
 ## Web Page Tests
 
@@ -37,8 +38,14 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 ## Markdown Viewer Tests
 
 - Open `manual-tests/reader-smoke.md` and confirm the custom viewer loads
+- Open a Markdown file directly from Finder and confirm the viewer starts at `100%` zoom when the URL has no explicit `zoom` parameter
+- Scroll down, zoom in / zoom out, and confirm the current reading position stays anchored instead of jumping to another part of the document
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `reader-smoke.md`, `reference-note.markdown`, and `viewer-smoke.pdf`
+- Confirm opening a sibling PDF / Markdown document from the sidebar keeps the sidebar open
+- Change the zoom, open a sibling PDF / Markdown document from the sidebar, and confirm the new viewer keeps the same zoom percentage
+- Confirm the file list keeps the directory listing order after opening another document; the opened document should not be moved to the bottom
+- In a folder with child folders, enter a child folder from the file panel, then use **Parent** to move one level up
 - Confirm headings appear in the sidebar TOC
 - Confirm the relative image `diagram.svg` renders correctly
 - Confirm relative links open the sibling Markdown file and PDF file correctly
@@ -52,6 +59,9 @@ Open these local files directly in Chrome after enabling file URL access. Keepin
 - Open `manual-tests/viewer-smoke.pdf` and confirm the custom viewer loads
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `viewer-smoke.pdf`, `reader-smoke.md`, and `reference-note.markdown`
+- Confirm opening a sibling PDF / Markdown document from the sidebar keeps the sidebar open and preserves the current zoom percentage
+- Confirm the file list keeps the directory listing order after opening another document; the opened document should not be moved to the bottom
+- In a folder with child folders, enter a child folder from the file panel, then use **Parent** to move one level up
 - Confirm the outline sidebar shows `Overview` and `Notes`, and both entries jump to the expected page
 - Confirm zoom in / zoom out / fit width work without losing the current reading position
 - Double-click a word on the PDF text layer and confirm the dictionary popup appears

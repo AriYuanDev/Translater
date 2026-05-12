@@ -11,8 +11,9 @@ The Chrome extension is meant to be loaded with Chrome's **Load unpacked** flow 
 
 - **Dictionary lookup**: Double-click a word to fetch Merriam-Webster definitions, phonetics, audio, and translated definition support.
 - **Sentence translation**: Select multi-word text to open the floating action toolbar and translate with DeepL.
-- **PDF reader**: Open PDFs in the custom viewer with lazy page rendering, outline sync, anchored zoom, and translation tools.
-- **Markdown reader**: Open Markdown files in the custom viewer with table of contents, HTML sanitization, relative path resolution, and translation tools.
+- **PDF reader**: Open PDFs in the custom viewer with lazy page rendering, outline sync, anchored zoom, folder navigation, and translation tools.
+- **Markdown reader**: Open Markdown files in the custom viewer with table of contents, HTML sanitization, relative path resolution, 100% default zoom, folder navigation, and translation tools.
+- **Shared document sidebar**: PDF and Markdown viewers share a file sidebar that preserves listing order, keeps the sidebar open while switching documents, can move into child folders or one parent folder, and carries the current zoom between PDF and Markdown.
 - **Shared UI stack**: Web pages, PDF, and Markdown surfaces reuse the same popup, floating toolbar, text-to-speech, and definition helpers.
 - **Android Markdown reader**: Open local Markdown files with Android's Storage Access Framework or Android's **Open with** flow, render with Markwon, double-tap words for lookup, and pronounce words with bundled offline sherpa-onnx/Piper TTS fallback.
 - **Android Process Text**: Select one English word in supported third-party apps and use **Translate & Speak** from Android's text-selection menu to open Translater for lookup and pronunciation.

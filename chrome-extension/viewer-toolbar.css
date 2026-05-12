@@ -66,3 +66,32 @@
     font-size: 14px;
     color: white;
 }
+
+.folder-nav {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.folder-nav-button {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.folder-nav-button:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: white;
+}

@@ -1,6 +1,7 @@
 import { getViewerType, isSupportedViewerDocument } from './viewer-routing.js';
 
 const DOCUMENT_NAME_REGEX = /[^<>:"/\\|?*\r\n\t]+?\.(?:pdf|md|markdown)\b/gi;
+const CHROME_FILE_ROW_REGEX = /addRow\(\s*("(?:\\.|[^"\\])*")\s*,\s*("(?:\\.|[^"\\])*")\s*,\s*(true|false|0|1)\b/gi;
 
 export function normalizeUrl(url) {
     try {
@@ -38,6 +39,24 @@ export function getDirectoryUrl(url) {
     }
 }
 
+export function getParentDirectoryUrl(directoryUrl) {
+    const value = String(directoryUrl || '');
+    if (!value) return '';
+
+    try {
+        const normalizedDirectoryUrl = normalizeUrl(value.endsWith('/') ? value : `${value}/`);
+        const parentDirectoryUrl = new URL('..', normalizedDirectoryUrl).toString();
+        return parentDirectoryUrl === normalizedDirectoryUrl ? '' : parentDirectoryUrl;
+    } catch {
+        const trimmed = value.endsWith('/') ? value.slice(0, -1) : value;
+        const separatorIndex = trimmed.lastIndexOf('/');
+        if (separatorIndex < 0) return '';
+
+        const parentDirectoryUrl = trimmed.slice(0, separatorIndex + 1);
+        return parentDirectoryUrl === value ? '' : parentDirectoryUrl;
+    }
+}
+
 export function getDirectoryLabel(directoryUrl) {
     try {
         const parsedUrl = new URL(directoryUrl);
@@ -49,6 +68,18 @@ export function getDirectoryLabel(directoryUrl) {
     } catch {
         return 'Current Folder';
     }
+}
+
+export function createDirectoryEntry(url) {
+    const normalizedUrl = normalizeUrl(url);
+    if (!normalizedUrl || !normalizedUrl.endsWith('/')) return null;
+
+    return {
+        type: 'directory',
+        url: normalizedUrl,
+        name: getDirectoryLabel(normalizedUrl),
+        label: 'Folder'
+    };
 }
 
 export function getHttpStatusFromError(error) {
@@ -76,6 +107,14 @@ function isSameDirectory(candidateUrl, directoryUrl) {
     return getDirectoryUrl(candidateUrl) === normalizeUrl(directoryUrl);
 }
 
+function isChildDirectory(candidateUrl, directoryUrl) {
+    const normalizedCandidateUrl = normalizeUrl(candidateUrl);
+    const normalizedDirectoryUrl = normalizeUrl(directoryUrl);
+    if (!normalizedCandidateUrl.endsWith('/')) return false;
+    if (normalizedCandidateUrl === normalizedDirectoryUrl) return false;
+    return getParentDirectoryUrl(normalizedCandidateUrl) === normalizedDirectoryUrl;
+}
+
 function extractAnchorCandidates(doc, html) {
     const candidates = [];
 
@@ -90,6 +129,28 @@ function extractAnchorCandidates(doc, html) {
     let match;
     while ((match = anchorRegex.exec(html)) !== null) {
         candidates.push({ href: match[2], text: '' });
+    }
+
+    return candidates;
+}
+
+function decodeJavaScriptStringLiteral(value) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return String(value || '').slice(1, -1);
+    }
+}
+
+function extractChromeFileRowCandidates(html) {
+    const candidates = [];
+    let match;
+
+    while ((match = CHROME_FILE_ROW_REGEX.exec(html)) !== null) {
+        candidates.push({
+            href: decodeJavaScriptStringLiteral(match[2]),
+            isDirectory: match[3] === 'true' || match[3] === '1'
+        });
     }
 
     return candidates;
@@ -141,7 +202,60 @@ function addDocumentFromCandidate(documents, candidate, directoryUrl) {
     documents.set(entry.url, entry);
 }
 
-export function parseDirectoryDocuments(
+function addItemFromCandidate(items, candidate, directoryUrl) {
+    const candidateValue = typeof candidate === 'object' ? candidate.href : candidate;
+    const isDirectoryHint = typeof candidate === 'object' && candidate.isDirectory;
+    let value = String(candidateValue || '').trim();
+    if (!value || value.startsWith('#') || value.startsWith('?')) {
+        return;
+    }
+
+    if (isDirectoryHint) {
+        value = value.endsWith('/') ? value : `${value}/`;
+    }
+
+    let resolvedUrl;
+    try {
+        resolvedUrl = new URL(value, directoryUrl).toString();
+    } catch {
+        return;
+    }
+
+    if (isDirectoryHint) {
+        if (isChildDirectory(resolvedUrl, directoryUrl)) {
+            const entry = createDirectoryEntry(resolvedUrl);
+            if (entry) {
+                items.set(`directory:${entry.url}`, entry);
+            }
+        }
+        return;
+    }
+
+    if (isSupportedViewerDocument(resolvedUrl) && isSameDirectory(resolvedUrl, directoryUrl)) {
+        const entry = createDocumentEntry(resolvedUrl);
+        if (entry) {
+            items.set(`document:${entry.url}`, { type: 'document', ...entry });
+        }
+        return;
+    }
+
+    if (isChildDirectory(resolvedUrl, directoryUrl)) {
+        const entry = createDirectoryEntry(resolvedUrl);
+        if (entry) {
+            items.set(`directory:${entry.url}`, entry);
+        }
+    }
+}
+
+function countDocumentItems(items) {
+    let count = 0;
+    items.forEach(item => {
+        if (item.type === 'document') count += 1;
+    });
+    return count;
+}
+
+export function parseDirectoryItems(
     directoryUrl,
     html,
     currentUrl,
@@ -150,34 +264,34 @@ export function parseDirectoryDocuments(
         nodeFilter = globalThis.NodeFilter
     } = {}
 ) {
-    const documents = new Map();
-    const normalizedCurrentUrl = normalizeUrl(currentUrl);
+    const items = new Map();
     const parser = new DOMParserCtor();
     const doc = parser.parseFromString(html, 'text/html');
 
     extractAnchorCandidates(doc, html).forEach(candidate => {
-        addDocumentFromCandidate(documents, candidate.href, directoryUrl);
+        addItemFromCandidate(items, candidate.href, directoryUrl);
     });
 
-    if (directoryUrl.startsWith('file://') && documents.size <= 1 && nodeFilter) {
+    extractChromeFileRowCandidates(html).forEach(candidate => {
+        addItemFromCandidate(items, candidate, directoryUrl);
+    });
+
+    if (directoryUrl.startsWith('file://') && countDocumentItems(items) <= 1 && nodeFilter) {
+        const documents = new Map();
         extractTextCandidates(doc, nodeFilter).forEach(candidate => {
             addDocumentFromCandidate(documents, candidate, directoryUrl);
         });
+
+        documents.forEach(entry => {
+            items.set(`document:${entry.url}`, { type: 'document', ...entry });
+        });
     }
 
-    if (isSupportedViewerDocument(normalizedCurrentUrl) && !documents.has(normalizedCurrentUrl)) {
-        const currentEntry = createDocumentEntry(normalizedCurrentUrl);
-        if (currentEntry) {
-            documents.set(currentEntry.url, currentEntry);
-        }
-    }
+    return Array.from(items.values());
+}
 
-    return Array.from(documents.values()).sort((left, right) => {
-        const leftIsCurrent = left.url === normalizedCurrentUrl;
-        const rightIsCurrent = right.url === normalizedCurrentUrl;
-        if (leftIsCurrent !== rightIsCurrent) {
-            return leftIsCurrent ? -1 : 1;
-        }
-        return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
-    });
+export function parseDirectoryDocuments(directoryUrl, html, currentUrl, options = {}) {
+    return parseDirectoryItems(directoryUrl, html, currentUrl, options)
+        .filter(item => item.type === 'document')
+        .map(({ type, ...documentEntry }) => documentEntry);
 }

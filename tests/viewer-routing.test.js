@@ -45,3 +45,13 @@ test('viewer URL helpers build encoded extension URLs', () => {
         'chrome-extension://test/mdviewer.html?url=' + encodeURIComponent('https://example.com/docs/readme.md')
     );
 });
+
+test('viewer URL helpers preserve viewer state parameters after source URL', () => {
+    const sourceUrl = 'https://example.com/files/report.pdf?download=1';
+    const runtimeUrlResolver = path => `chrome-extension://test/${path}`;
+
+    assert.equal(
+        createViewerUrlForDocument(sourceUrl, runtimeUrlResolver, { zoom: 175 }),
+        'chrome-extension://test/pdfviewer.html?url=' + encodeURIComponent(sourceUrl) + '&zoom=175'
+    );
+});

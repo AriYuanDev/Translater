@@ -59,12 +59,25 @@ export function hasViewerBypass(url) {
     }
 }
 
-export function createViewerPageUrl(viewerPage, sourceUrl, runtimeUrlResolver = value => value) {
-    return runtimeUrlResolver(viewerPage) + '?url=' + encodeURIComponent(sourceUrl);
+function serializeViewerParams(viewerStateParams = {}) {
+    const params = new URLSearchParams();
+
+    Object.entries(viewerStateParams || {}).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        params.set(key, String(value));
+    });
+
+    return params.toString();
 }
 
-export function createViewerUrlForDocument(url, runtimeUrlResolver = value => value) {
+export function createViewerPageUrl(viewerPage, sourceUrl, runtimeUrlResolver = value => value, viewerStateParams = {}) {
+    const baseUrl = runtimeUrlResolver(viewerPage) + '?url=' + encodeURIComponent(sourceUrl);
+    const serializedParams = serializeViewerParams(viewerStateParams);
+    return serializedParams ? `${baseUrl}&${serializedParams}` : baseUrl;
+}
+
+export function createViewerUrlForDocument(url, runtimeUrlResolver = value => value, viewerStateParams = {}) {
     const viewerType = getViewerType(url);
     if (!viewerType) return url;
-    return createViewerPageUrl(viewerType.viewerPage, url, runtimeUrlResolver);
+    return createViewerPageUrl(viewerType.viewerPage, url, runtimeUrlResolver, viewerStateParams);
 }

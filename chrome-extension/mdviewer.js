@@ -1,5 +1,13 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
 import { sanitizeMarkdownHtml, rewriteRelativePaths } from './markdown-helpers.js';
+import { resetCurrentTabBrowserZoom } from './viewer-browser-zoom.js';
+import {
+    captureElementScrollAnchor,
+    createZoomStateParams,
+    getExplicitZoomParam,
+    getClampedZoomPercent,
+    restoreElementScrollAnchor
+} from './viewer-zoom-helpers.js';
 
 /**
  * Translater Markdown Reader Script
@@ -60,7 +68,15 @@ const SENTENCE_POPUP_HEIGHT = 180;
 const MIN_ZOOM = 60;
 const MAX_ZOOM = 200;
 const ZOOM_STEP = 10;
-let currentZoom = 100;
+const DEFAULT_ZOOM = 100;
+const initialViewerParams = new URLSearchParams(window.location.search);
+const initialZoomParam = getExplicitZoomParam(initialViewerParams);
+let currentZoom = getClampedZoomPercent(
+    initialZoomParam,
+    DEFAULT_ZOOM,
+    MIN_ZOOM,
+    MAX_ZOOM
+);
 
 
 // ==================== Markdown Loading and Rendering ====================
@@ -96,6 +112,7 @@ async function loadMarkdown(url) {
 
         // Build TOC
         buildTableOfContents();
+        updateZoomLevel();
 
         showLoading(false);
     } catch (error) {
@@ -142,19 +159,19 @@ function updateZoomLevel() {
     mdContent.style.marginBottom = `${naturalHeight * (scale - 1)}px`;
 }
 
-document.getElementById('zoomOut').onclick = () => {
-    if (currentZoom > MIN_ZOOM) {
-        currentZoom -= ZOOM_STEP;
-        updateZoomLevel();
-    }
-};
+function applyZoom(newZoom) {
+    const targetZoom = getClampedZoomPercent(newZoom, currentZoom, MIN_ZOOM, MAX_ZOOM);
+    if (targetZoom === currentZoom) return;
 
-document.getElementById('zoomIn').onclick = () => {
-    if (currentZoom < MAX_ZOOM) {
-        currentZoom += ZOOM_STEP;
-        updateZoomLevel();
-    }
-};
+    const anchor = captureElementScrollAnchor(viewerContainer, mdContent);
+    currentZoom = targetZoom;
+    updateZoomLevel();
+    restoreElementScrollAnchor(viewerContainer, mdContent, anchor);
+}
+
+document.getElementById('zoomOut').onclick = () => applyZoom(currentZoom - ZOOM_STEP);
+
+document.getElementById('zoomIn').onclick = () => applyZoom(currentZoom + ZOOM_STEP);
 
 // ==================== Toolbar ====================
 
@@ -246,13 +263,17 @@ function showError(message) {
 
 const url = getMdUrl();
 if (url) {
+    resetCurrentTabBrowserZoom();
     setupViewerSidebar({
         currentUrl: url,
         sidebar,
         viewerContainer,
         sidebarToggle,
         fileBrowserContainer,
-        sidebarFolderName
+        sidebarFolderName,
+        getViewerStateParams: () => createZoomStateParams(currentZoom, {
+            defaultZoom: DEFAULT_ZOOM
+        })
     });
     loadMarkdown(url);
 } else {

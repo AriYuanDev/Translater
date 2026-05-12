@@ -68,3 +68,173 @@ test('setupViewerSidebar falls back to the current document when directory listi
     assert.equal(folderName.textContent, 'docs');
     assert.equal(folderName.title, 'https://example.com/docs/');
 });
+
+test('setupViewerSidebar appends fresh viewer state params to document links', async () => {
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async text() {
+            return '<html><body><a href="next.md">Next</a></body></html>';
+        }
+    });
+
+    let zoom = 150;
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/current.pdf',
+        sidebar: document.getElementById('sidebar'),
+        viewerContainer: document.getElementById('viewerContainer'),
+        sidebarToggle: document.getElementById('sidebarToggle'),
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName'),
+        getViewerStateParams: () => ({ zoom })
+    });
+
+    await flushPromises();
+
+    const nextLink = Array.from(document.querySelectorAll('a.file-item'))
+        .find(link => link.textContent.includes('next.md'));
+    assert.ok(nextLink);
+    assert.equal(nextLink.href, 'chrome-extension://test/mdviewer.html?url=' + encodeURIComponent('https://example.com/docs/next.md') + '&zoom=150');
+
+    zoom = 180;
+    nextLink.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    assert.equal(nextLink.href, 'chrome-extension://test/mdviewer.html?url=' + encodeURIComponent('https://example.com/docs/next.md') + '&zoom=180');
+});
+
+test('setupViewerSidebar preserves open sidebar state in document links', async () => {
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async text() {
+            return '<html><body><a href="next.md">Next</a></body></html>';
+        }
+    });
+
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.add('open');
+
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/current.pdf',
+        sidebar,
+        viewerContainer: document.getElementById('viewerContainer'),
+        sidebarToggle: document.getElementById('sidebarToggle'),
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName')
+    });
+
+    await flushPromises();
+
+    const nextLink = Array.from(document.querySelectorAll('a.file-item'))
+        .find(link => link.textContent.includes('next.md'));
+    assert.ok(nextLink);
+    assert.equal(nextLink.href, 'chrome-extension://test/mdviewer.html?url=' + encodeURIComponent('https://example.com/docs/next.md') + '&sidebar=open');
+});
+
+test('setupViewerSidebar restores open sidebar state from the viewer URL', async () => {
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async text() {
+            return '<html><body><a href="next.md">Next</a></body></html>';
+        }
+    });
+    window.history.pushState(null, '', 'https://example.com/viewer.html?sidebar=open');
+
+    const sidebar = document.getElementById('sidebar');
+    const viewerContainer = document.getElementById('viewerContainer');
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/current.pdf',
+        sidebar,
+        viewerContainer,
+        sidebarToggle: document.getElementById('sidebarToggle'),
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName')
+    });
+
+    await flushPromises();
+
+    assert.equal(sidebar.classList.contains('open'), true);
+    assert.equal(viewerContainer.classList.contains('sidebar-open'), true);
+});
+
+test('setupViewerSidebar can enter child folders from the file panel', async () => {
+    const requests = [];
+    globalThis.fetch = async (url) => {
+        requests.push(url);
+        return {
+            ok: true,
+            status: 200,
+            async text() {
+                if (url === 'https://example.com/docs/') {
+                    return '<html><body><a href="topic-a/">Topic A</a><a href="overview.md">Overview</a></body></html>';
+                }
+                if (url === 'https://example.com/docs/topic-a/') {
+                    return '<html><body><a href="lesson.md">Lesson</a></body></html>';
+                }
+                return '';
+            }
+        };
+    };
+
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/overview.md',
+        sidebar: document.getElementById('sidebar'),
+        viewerContainer: document.getElementById('viewerContainer'),
+        sidebarToggle: document.getElementById('sidebarToggle'),
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName')
+    });
+
+    await flushPromises();
+
+    const folderLink = Array.from(document.querySelectorAll('.file-item'))
+        .find(link => link.textContent.includes('topic-a'));
+    assert.ok(folderLink);
+    folderLink.click();
+    await flushPromises();
+
+    assert.deepEqual(requests, ['https://example.com/docs/', 'https://example.com/docs/topic-a/']);
+    assert.equal(document.getElementById('sidebarFolderName').textContent, 'topic-a');
+    assert.match(document.getElementById('fileBrowserContainer').textContent, /lesson\.md/);
+});
+
+test('setupViewerSidebar can load one parent directory from the file panel', async () => {
+    const requests = [];
+    globalThis.fetch = async (url) => {
+        requests.push(url);
+        return {
+            ok: true,
+            status: 200,
+            async text() {
+                if (url === 'https://example.com/docs/week1/') {
+                    return '<html><body><a href="current.pdf">Current</a><a href="notes.md">Notes</a></body></html>';
+                }
+                if (url === 'https://example.com/docs/') {
+                    return '<html><body><a href="overview.md">Overview</a></body></html>';
+                }
+                return '';
+            }
+        };
+    };
+
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/week1/current.pdf',
+        sidebar: document.getElementById('sidebar'),
+        viewerContainer: document.getElementById('viewerContainer'),
+        sidebarToggle: document.getElementById('sidebarToggle'),
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName')
+    });
+
+    await flushPromises();
+
+    const parentButton = document.querySelector('[data-directory-action="parent"]');
+    assert.ok(parentButton);
+    parentButton.click();
+    await flushPromises();
+
+    assert.deepEqual(requests, ['https://example.com/docs/week1/', 'https://example.com/docs/']);
+    assert.equal(document.getElementById('sidebarFolderName').textContent, 'docs');
+    assert.match(document.getElementById('fileBrowserContainer').textContent, /overview\.md/);
+    assert.doesNotMatch(document.getElementById('fileBrowserContainer').textContent, /current\.pdf/);
+});
