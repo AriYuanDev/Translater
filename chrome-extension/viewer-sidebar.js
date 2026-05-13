@@ -9,6 +9,8 @@ import {
     shouldFallbackToCurrentDocument
 } from './viewer-sidebar-helpers.js';
 
+const ROOT_SIDEBAR_OPEN_CLASS = 'viewer-sidebar-open';
+
 async function loadDirectoryDocuments(currentUrl, targetDirectoryUrl = getDirectoryUrl(currentUrl)) {
     const directoryUrl = normalizeUrl(targetDirectoryUrl);
     if (!directoryUrl) {
@@ -203,6 +205,12 @@ export function setupViewerSidebar({
     let activeDirectoryUrl = currentDirectoryUrl;
     let loadRequestId = 0;
 
+    const setSidebarOpen = (isOpen) => {
+        sidebar.classList.toggle('open', isOpen);
+        viewerContainer.classList.toggle('sidebar-open', isOpen);
+        document.documentElement.classList.toggle(ROOT_SIDEBAR_OPEN_CLASS, isOpen);
+    };
+
     const setActivePanel = (panelName) => {
         tabButtons.forEach(button => {
             button.classList.toggle('active', button.dataset.sidebarPanel === panelName);
@@ -219,13 +227,11 @@ export function setupViewerSidebar({
     });
 
     sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
-        viewerContainer.classList.toggle('sidebar-open');
+        setSidebarOpen(!sidebar.classList.contains('open'));
     });
 
     if (new URLSearchParams(window.location.search).get('sidebar') === 'open') {
-        sidebar.classList.add('open');
-        viewerContainer.classList.add('sidebar-open');
+        setSidebarOpen(true);
     }
 
     setActivePanel(defaultPanel);

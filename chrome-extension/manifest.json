@@ -59,6 +59,7 @@
         "mdviewer.css",
         "viewer-toolbar.css",
         "viewer-browser-zoom.js",
+        "viewer-initial-state.js",
         "viewer-zoom-helpers.js",
         "viewer-sidebar.js",
         "viewer-routing.js",

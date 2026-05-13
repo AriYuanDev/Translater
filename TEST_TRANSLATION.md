@@ -43,6 +43,7 @@ For folder navigation checks, also test against any local folder that contains a
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `reader-smoke.md`, `reference-note.markdown`, and `viewer-smoke.pdf`
 - Confirm opening a sibling PDF / Markdown document from the sidebar keeps the sidebar open
+- Confirm switching documents from an open sidebar does not visually collapse and reopen the sidebar or animate the document width
 - Change the zoom, open a sibling PDF / Markdown document from the sidebar, and confirm the new viewer keeps the same zoom percentage
 - Confirm the file list keeps the directory listing order after opening another document; the opened document should not be moved to the bottom
 - In a folder with child folders, enter a child folder from the file panel, then use **Parent** to move one level up
@@ -60,6 +61,7 @@ For folder navigation checks, also test against any local folder that contains a
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `viewer-smoke.pdf`, `reader-smoke.md`, and `reference-note.markdown`
 - Confirm opening a sibling PDF / Markdown document from the sidebar keeps the sidebar open and preserves the current zoom percentage
+- Confirm switching documents from an open sidebar does not visually collapse and reopen the sidebar or animate the document width
 - Confirm the file list keeps the directory listing order after opening another document; the opened document should not be moved to the bottom
 - In a folder with child folders, enter a child folder from the file panel, then use **Parent** to move one level up
 - Confirm the outline sidebar shows `Overview` and `Notes`, and both entries jump to the expected page

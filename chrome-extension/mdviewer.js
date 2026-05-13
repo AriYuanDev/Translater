@@ -238,7 +238,7 @@ window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 // ==================== Loading / Error UI ====================
 
 function showLoading(show) {
-    let overlay = document.querySelector('.loading-overlay');
+    let overlay = viewerContainer.querySelector('.loading-overlay');
     if (show && !overlay) {
         overlay = document.createElement('div');
         overlay.className = 'loading-overlay';
@@ -249,7 +249,7 @@ function showLoading(show) {
         text.textContent = 'Loading Markdown...';
         overlay.appendChild(spinner);
         overlay.appendChild(text);
-        document.body.appendChild(overlay);
+        viewerContainer.appendChild(overlay);
     } else if (!show && overlay) overlay.remove();
 }
 

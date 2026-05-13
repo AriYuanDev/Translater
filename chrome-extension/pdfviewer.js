@@ -696,7 +696,7 @@ document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
 window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 
 function showLoading(show) {
-    let overlay = document.querySelector('.loading-overlay');
+    let overlay = viewerContainer.querySelector('.loading-overlay');
     if (show && !overlay) {
         overlay = document.createElement('div');
         overlay.className = 'loading-overlay';
@@ -707,7 +707,7 @@ function showLoading(show) {
         text.textContent = 'Loading PDF...';
         overlay.appendChild(spinner);
         overlay.appendChild(text);
-        document.body.appendChild(overlay);
+        viewerContainer.appendChild(overlay);
     } else if (!show && overlay) overlay.remove();
 }
 
