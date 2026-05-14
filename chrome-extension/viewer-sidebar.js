@@ -205,10 +205,27 @@ export function setupViewerSidebar({
     let activeDirectoryUrl = currentDirectoryUrl;
     let loadRequestId = 0;
 
-    const setSidebarOpen = (isOpen) => {
+    const syncSidebarUrlState = (isOpen) => {
+        try {
+            const url = new URL(window.location.href);
+            if (isOpen) {
+                url.searchParams.set('sidebar', 'open');
+            } else {
+                url.searchParams.delete('sidebar');
+            }
+            window.history.replaceState(window.history.state, document.title, url.toString());
+        } catch {
+            // Keep sidebar toggling usable even if history APIs are unavailable.
+        }
+    };
+
+    const setSidebarOpen = (isOpen, { syncUrl = false } = {}) => {
         sidebar.classList.toggle('open', isOpen);
         viewerContainer.classList.toggle('sidebar-open', isOpen);
         document.documentElement.classList.toggle(ROOT_SIDEBAR_OPEN_CLASS, isOpen);
+        if (syncUrl) {
+            syncSidebarUrlState(isOpen);
+        }
     };
 
     const setActivePanel = (panelName) => {
@@ -227,7 +244,7 @@ export function setupViewerSidebar({
     });
 
     sidebarToggle.addEventListener('click', () => {
-        setSidebarOpen(!sidebar.classList.contains('open'));
+        setSidebarOpen(!sidebar.classList.contains('open'), { syncUrl: true });
     });
 
     if (new URLSearchParams(window.location.search).get('sidebar') === 'open') {

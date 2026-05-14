@@ -194,6 +194,47 @@ test('setupViewerSidebar mirrors open sidebar state onto the document root', asy
     assert.equal(document.documentElement.classList.contains('viewer-sidebar-open'), true);
 });
 
+test('setupViewerSidebar removes sidebar URL state when the user closes the sidebar', async () => {
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async text() {
+            return '<html><body><a href="next.md">Next</a></body></html>';
+        }
+    });
+    window.history.pushState(null, '', 'https://example.com/viewer.html?url=current.md&sidebar=open&zoom=150');
+
+    const sidebar = document.getElementById('sidebar');
+    const viewerContainer = document.getElementById('viewerContainer');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    setupViewerSidebar({
+        currentUrl: 'https://example.com/docs/current.md',
+        sidebar,
+        viewerContainer,
+        sidebarToggle,
+        fileBrowserContainer: document.getElementById('fileBrowserContainer'),
+        sidebarFolderName: document.getElementById('sidebarFolderName')
+    });
+
+    await flushPromises();
+
+    assert.equal(sidebar.classList.contains('open'), true);
+
+    sidebarToggle.click();
+
+    const closedParams = new URLSearchParams(window.location.search);
+    assert.equal(sidebar.classList.contains('open'), false);
+    assert.equal(closedParams.get('sidebar'), null);
+    assert.equal(closedParams.get('zoom'), '150');
+
+    sidebarToggle.click();
+
+    const reopenedParams = new URLSearchParams(window.location.search);
+    assert.equal(sidebar.classList.contains('open'), true);
+    assert.equal(reopenedParams.get('sidebar'), 'open');
+    assert.equal(reopenedParams.get('zoom'), '150');
+});
+
 test('setupViewerSidebar can enter child folders from the file panel', async () => {
     const requests = [];
     globalThis.fetch = async (url) => {

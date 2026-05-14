@@ -40,6 +40,24 @@ async page => {
     assert(markdownChecks.fileBrowserText.includes('viewer-smoke.pdf'), 'Markdown file browser is missing the PDF entry.');
     assert(markdownChecks.zoomLevel === '100%', 'Markdown viewer did not default to 100% zoom without a zoom parameter.');
 
+    await page.locator('#sidebarToggle').click();
+    await page.waitForFunction(() => document.getElementById('sidebar')?.classList.contains('open'));
+    await page.locator('#sidebarToggle').click();
+    await page.waitForFunction(() => !document.getElementById('sidebar')?.classList.contains('open'));
+    await page.reload();
+    await page.waitForFunction(() => document.title === 'reader-smoke.md');
+    await page.waitForFunction(() => document.body.innerText.includes('reference-note.markdown'));
+
+    const markdownRefreshChecks = await page.evaluate(() => ({
+        sidebarParam: new URLSearchParams(window.location.search).get('sidebar'),
+        sidebarOpen: document.getElementById('sidebar')?.classList.contains('open'),
+        rootOpen: document.documentElement.classList.contains('viewer-sidebar-open')
+    }));
+
+    assert(markdownRefreshChecks.sidebarParam === null, 'Markdown viewer kept sidebar=open after the sidebar was closed.');
+    assert(markdownRefreshChecks.sidebarOpen === false, 'Markdown sidebar reopened after refresh even though it was closed.');
+    assert(markdownRefreshChecks.rootOpen === false, 'Markdown root kept the sidebar-open class after refresh.');
+
     await page.setViewportSize({ width: 900, height: 960 });
     for (let i = 0; i < 5; i += 1) {
         await page.locator('#zoomIn').click();
@@ -112,6 +130,7 @@ async page => {
             'web content script injection',
             'markdown viewer redirect',
             'markdown default zoom',
+            'markdown closed sidebar refresh state',
             'markdown 150% layout zoom reachability',
             'markdown sanitization and relative paths',
             'pdf viewer redirect',
