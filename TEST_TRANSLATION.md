@@ -40,6 +40,7 @@ For folder navigation checks, also test against any local folder that contains a
 - Open `manual-tests/reader-smoke.md` and confirm the custom viewer loads
 - Open a Markdown file directly from Finder and confirm the viewer starts at `100%` zoom when the URL has no explicit `zoom` parameter
 - Scroll down, zoom in / zoom out, and confirm the current reading position stays anchored instead of jumping to another part of the document
+- Zoom Markdown to `150%` or higher and confirm the content remains reachable instead of being clipped off the left or right edge
 - Open the left sidebar and confirm the **Files** tab lists sibling PDF / Markdown documents from the same folder
 - Confirm the sidebar lists `reader-smoke.md`, `reference-note.markdown`, and `viewer-smoke.pdf`
 - Confirm opening a sibling PDF / Markdown document from the sidebar keeps the sidebar open

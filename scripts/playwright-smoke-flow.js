@@ -29,7 +29,8 @@ async page => {
         javascriptHrefRemoved: document.querySelector('#mdContent a[href^="javascript:"]') === null,
         scriptExecuted: window.translaterMdScriptExecuted === true,
         imageSrc: document.querySelector('#mdContent img')?.src || '',
-        fileBrowserText: document.getElementById('fileBrowserContainer')?.innerText || ''
+        fileBrowserText: document.getElementById('fileBrowserContainer')?.innerText || '',
+        zoomLevel: document.getElementById('zoomLevel')?.textContent?.trim()
     }));
 
     assert(markdownChecks.onclickRemoved, 'Markdown sanitization did not remove inline onclick.');
@@ -37,6 +38,35 @@ async page => {
     assert(markdownChecks.scriptExecuted === false, 'Markdown script tag executed unexpectedly.');
     assert(markdownChecks.imageSrc === `${baseUrl}/manual-tests/diagram.svg`, 'Markdown relative image did not resolve correctly.');
     assert(markdownChecks.fileBrowserText.includes('viewer-smoke.pdf'), 'Markdown file browser is missing the PDF entry.');
+    assert(markdownChecks.zoomLevel === '100%', 'Markdown viewer did not default to 100% zoom without a zoom parameter.');
+
+    await page.setViewportSize({ width: 900, height: 960 });
+    for (let i = 0; i < 5; i += 1) {
+        await page.locator('#zoomIn').click();
+    }
+
+    const markdownZoomChecks = await page.evaluate(() => {
+        const viewerContainer = document.getElementById('viewerContainer');
+        const mdContent = document.getElementById('mdContent');
+        const containerRect = viewerContainer.getBoundingClientRect();
+        const contentRect = mdContent.getBoundingClientRect();
+
+        return {
+            zoomLevel: document.getElementById('zoomLevel')?.textContent?.trim(),
+            contentZoom: mdContent.style.zoom,
+            contentTransform: mdContent.style.transform,
+            containerLeft: containerRect.left,
+            contentLeft: contentRect.left
+        };
+    });
+
+    assert(markdownZoomChecks.zoomLevel === '150%', 'Markdown zoom controls did not reach 150%.');
+    assert(markdownZoomChecks.contentZoom === '1.5', 'Markdown zoom did not use layout zoom at 150%.');
+    assert(markdownZoomChecks.contentTransform === '', 'Markdown zoom still applies transform scaling.');
+    assert(
+        markdownZoomChecks.contentLeft >= markdownZoomChecks.containerLeft - 1,
+        'Markdown zoomed content starts outside the scroll container and can become unreachable.'
+    );
 
     await page.getByText('metamorphosis', { exact: true }).dblclick();
     await page.waitForFunction(() => !!document.getElementById('translator-extension-host'));
@@ -81,6 +111,8 @@ async page => {
         checks: [
             'web content script injection',
             'markdown viewer redirect',
+            'markdown default zoom',
+            'markdown 150% layout zoom reachability',
             'markdown sanitization and relative paths',
             'pdf viewer redirect',
             'pdf outline and sibling file list'

@@ -2,6 +2,7 @@ import { setupViewerSidebar } from './viewer-sidebar.js';
 import { sanitizeMarkdownHtml, rewriteRelativePaths } from './markdown-helpers.js';
 import { resetCurrentTabBrowserZoom } from './viewer-browser-zoom.js';
 import {
+    applyElementZoom,
     captureElementScrollAnchor,
     createZoomStateParams,
     getExplicitZoomParam,
@@ -151,12 +152,7 @@ function buildTableOfContents() {
 
 function updateZoomLevel() {
     zoomLevelSpan.textContent = currentZoom + '%';
-    const scale = currentZoom / 100;
-    mdContent.style.transform = `scale(${scale})`;
-    mdContent.style.transformOrigin = 'top center';
-    // Adjust wrapper height so the scrollable area matches the scaled content
-    const naturalHeight = mdContent.scrollHeight;
-    mdContent.style.marginBottom = `${naturalHeight * (scale - 1)}px`;
+    applyElementZoom(mdContent, currentZoom);
 }
 
 function applyZoom(newZoom) {

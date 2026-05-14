@@ -22,3 +22,10 @@ test('Markdown viewer disables native scroll anchoring during manual zoom restor
 
     assert.match(viewerContainerRule, /overflow-anchor:\s*none\s*;/);
 });
+
+test('Markdown viewer does not flex-center oversized zoomed content', () => {
+    const viewerContainerRule = getRuleBody('.viewer-container', mdViewerCss);
+
+    assert.match(viewerContainerRule, /display:\s*block\s*;/);
+    assert.doesNotMatch(viewerContainerRule, /align-items:\s*center\s*;/);
+});
