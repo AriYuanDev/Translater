@@ -78,6 +78,59 @@ test('handleWordLookupInteraction renders loading state and then dictionary resu
     assert.match(getShadowText(), /noun/);
 });
 
+test('handleWordLookupInteraction does not auto-translate definitions and translates one definition on click', async () => {
+    let translateCalls = 0;
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        if (message.action === 'translate') {
+            translateCalls += 1;
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.equal(translateCalls, 0);
+    assert.match(getShadowText(), /support definition/);
+    assert.doesNotMatch(getShadowText(), /支持释义/);
+
+    const translateButton = getShadowRoot().querySelector('.translator-translate-definition-btn');
+    assert.ok(translateButton);
+    translateButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.equal(translateCalls, 1);
+    assert.match(getShadowText(), /支持释义/);
+});
+
+test('handleSelectionTranslation surfaces long text guard errors without generic copy', async () => {
+    installChromeStub(message => {
+        if (message.action === 'translate') {
+            return {
+                success: false,
+                errorCode: 'TEXT_TOO_LONG',
+                error: 'Selected text exceeds 500 characters. Please shorten the selection.'
+            };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleSelectionTranslation({
+        text: 'a'.repeat(501),
+        x: 220,
+        y: 180
+    });
+
+    assert.match(getShadowText(), /500 characters/);
+});
+
 test('handleWordLookupInteraction falls back to translation when dictionary returns no data', async () => {
     installChromeStub(message => {
         if (message.action === 'fetchDictionary') {

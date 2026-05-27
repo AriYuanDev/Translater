@@ -553,6 +553,9 @@ html.viewer-sidebar-open .viewer-container {
 .translator-definition-zh::before { content: 'Chinese'; display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: rgba(52, 73, 94, 0.7); margin-bottom: 4px; }
 .translator-definition-en::before { content: 'English'; display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: rgba(52, 73, 94, 0.7); margin-bottom: 4px; }
 .translator-definition-zh-error { color: #c0392b; }
+.translator-translate-definition-btn { border: none; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; cursor: pointer; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; font-size: 12px; font-weight: 700; }
+.translator-translate-definition-btn:disabled { cursor: default; opacity: 0.65; }
+.translator-definition-translation-result { line-height: 1.5; }
 
 .translator-translation { font-size: 16px; color: #2d3436; font-weight: 600; margin-top: 6px; line-height: 1.6; }
 
@@ -688,15 +691,13 @@ html.viewer-sidebar-open .viewer-container {
 .translator-float-btn.google-search-btn {
     position: absolute;
     left: 50%;
-    margin-left: -12px;
-    bottom: -34px;
+    margin-left: -16px;
+    bottom: -40px;
     background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
     color: white;
     font-size: 14px;
     font-weight: 700;
     box-shadow: 0 4px 15px rgba(66, 133, 244, 0.5);
-    width: 24px;
-    height: 24px;
 }
 
 .translator-float-btn.google-search-btn:hover {

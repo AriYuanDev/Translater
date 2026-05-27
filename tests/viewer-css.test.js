@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+const contentCss = readFileSync(new URL('../chrome-extension/styles.css', import.meta.url), 'utf8');
 const mdViewerCss = readFileSync(new URL('../chrome-extension/mdviewer.css', import.meta.url), 'utf8');
+const pdfViewerCss = readFileSync(new URL('../chrome-extension/pdfviewer.css', import.meta.url), 'utf8');
 
 function getRuleBody(selector, css) {
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -28,4 +30,16 @@ test('Markdown viewer does not flex-center oversized zoomed content', () => {
 
     assert.match(viewerContainerRule, /display:\s*block\s*;/);
     assert.doesNotMatch(viewerContainerRule, /align-items:\s*center\s*;/);
+});
+
+test('Google search floating button uses the same dimensions as the translation button', () => {
+    for (const css of [contentCss, mdViewerCss, pdfViewerCss]) {
+        const baseButtonRule = getRuleBody('.translator-float-btn', css);
+        const googleButtonRule = getRuleBody('.translator-float-btn.google-search-btn', css);
+
+        assert.match(baseButtonRule, /width:\s*32px\s*;/);
+        assert.match(baseButtonRule, /height:\s*32px\s*;/);
+        assert.doesNotMatch(googleButtonRule, /width:\s*24px\s*;/);
+        assert.doesNotMatch(googleButtonRule, /height:\s*24px\s*;/);
+    }
 });

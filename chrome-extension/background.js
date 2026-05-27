@@ -78,6 +78,42 @@ function saveDictionaryCache() {
 const pendingDictionaryRequests = new Map();
 const pendingTranslationRequests = new Map();
 const REQUEST_TIMEOUT_MS = 15000;
+const MAX_TRANSLATION_TEXT_CHARS = 500;
+const TRANSLATION_CACHE_MAX_SIZE = 2000;
+const TRANSLATION_CACHE_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days
+const QUOTA_BREAKER_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const TRANSLATION_CACHE_STORAGE_KEY = 'translationCache';
+const DEEPL_QUOTA_STATE_STORAGE_KEY = 'deepLQuotaState';
+const TRANSLATE_TRIGGER_MODE_KEY = 'translateTriggerMode';
+const DEFAULT_TRANSLATE_TRIGGER_MODE = 'click';
+
+const translationCache = new Map();
+let translationCacheSavePending = false;
+let deepLQuotaState = null;
+
+const translationStateReady = new Promise(resolve => {
+  chrome.storage.local.get([TRANSLATION_CACHE_STORAGE_KEY, DEEPL_QUOTA_STATE_STORAGE_KEY], (result) => {
+    const storedCache = result[TRANSLATION_CACHE_STORAGE_KEY];
+    if (Array.isArray(storedCache)) {
+      storedCache.forEach(([key, entry]) => {
+        if (isFreshTranslationCacheEntry(entry)) {
+          translationCache.set(key, entry);
+        }
+      });
+    }
+    deepLQuotaState = normalizeQuotaState(result[DEEPL_QUOTA_STATE_STORAGE_KEY]);
+    pruneTranslationCache();
+    resolve();
+  });
+});
+
+class TranslationError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'TranslationError';
+    this.code = code;
+  }
+}
 
 async function fetchWithTimeout(resource, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -98,15 +134,129 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = REQUEST_TIME
   }
 }
 
+function normalizeTranslationText(text) {
+  return (text || '').trim().replace(/\s+/g, ' ');
+}
+
+function createTranslationCacheKey(targetLang, text) {
+  const normalized = `${targetLang}:${normalizeTranslationText(text)}`;
+  let hash = 2166136261;
+  for (let index = 0; index < normalized.length; index++) {
+    hash ^= normalized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${targetLang}:${normalized.length}:${(hash >>> 0).toString(36)}`;
+}
+
+function isFreshTranslationCacheEntry(entry, now = Date.now()) {
+  return !!entry && Number.isFinite(entry.createdAt) && now - entry.createdAt < TRANSLATION_CACHE_TTL;
+}
+
+function formatTranslationCacheEntry(entry, cached = false) {
+  return {
+    original: entry.original,
+    translated: entry.translated,
+    sourceLang: entry.sourceLang || 'auto',
+    engine: entry.engine || 'DeepL',
+    cached
+  };
+}
+
+function getCachedTranslation(cacheKey) {
+  const entry = translationCache.get(cacheKey);
+  if (!entry) return null;
+  if (!isFreshTranslationCacheEntry(entry)) {
+    translationCache.delete(cacheKey);
+    saveTranslationCache();
+    return null;
+  }
+  entry.lastAccessedAt = Date.now();
+  translationCache.delete(cacheKey);
+  translationCache.set(cacheKey, entry);
+  saveTranslationCache();
+  return formatTranslationCacheEntry(entry, true);
+}
+
+function setCachedTranslation(cacheKey, result) {
+  const now = Date.now();
+  translationCache.set(cacheKey, {
+    original: result.original,
+    translated: result.translated,
+    targetLang: result.targetLang,
+    sourceLang: result.sourceLang,
+    engine: result.engine,
+    createdAt: now,
+    lastAccessedAt: now
+  });
+  pruneTranslationCache();
+  saveTranslationCache();
+}
+
+function pruneTranslationCache(now = Date.now()) {
+  for (const [key, entry] of translationCache.entries()) {
+    if (!isFreshTranslationCacheEntry(entry, now)) {
+      translationCache.delete(key);
+    }
+  }
+
+  if (translationCache.size <= TRANSLATION_CACHE_MAX_SIZE) return;
+
+  const entries = Array.from(translationCache.entries())
+    .sort((a, b) => (a[1].lastAccessedAt || a[1].createdAt || 0) - (b[1].lastAccessedAt || b[1].createdAt || 0));
+  const entriesToDelete = entries.slice(0, translationCache.size - TRANSLATION_CACHE_MAX_SIZE);
+  entriesToDelete.forEach(([key]) => translationCache.delete(key));
+}
+
+function saveTranslationCache() {
+  if (translationCacheSavePending) return;
+  translationCacheSavePending = true;
+  const storageArea = chrome.storage.local;
+
+  setTimeout(() => {
+    translationCacheSavePending = false;
+    storageArea.set({ [TRANSLATION_CACHE_STORAGE_KEY]: Array.from(translationCache.entries()) });
+  }, 500);
+}
+
+function normalizeQuotaState(state) {
+  if (!state || state.status !== 'quota-exceeded' || !Number.isFinite(state.timestamp)) return null;
+  if (Date.now() - state.timestamp >= QUOTA_BREAKER_TTL) return null;
+  return state;
+}
+
+function isDeepLQuotaBlocked() {
+  deepLQuotaState = normalizeQuotaState(deepLQuotaState);
+  return !!deepLQuotaState;
+}
+
+async function setDeepLQuotaExceeded() {
+  deepLQuotaState = {
+    status: 'quota-exceeded',
+    timestamp: Date.now()
+  };
+  await chrome.storage.local.set({ [DEEPL_QUOTA_STATE_STORAGE_KEY]: deepLQuotaState });
+}
+
+async function clearDeepLQuotaState() {
+  deepLQuotaState = null;
+  await chrome.storage.local.remove(DEEPL_QUOTA_STATE_STORAGE_KEY);
+}
+
+function normalizeTranslateTriggerMode(mode) {
+  return mode === 'hover' ? 'hover' : DEFAULT_TRANSLATE_TRIGGER_MODE;
+}
+
 // API Key memory cache
 let cachedMWApiKey = null;
 let cachedDeepLApiKey = null;
+let cachedTranslateTriggerMode = null;
 
 // Prefetch API Keys on initialization
 async function prefetchApiKeys() {
-  const result = await chrome.storage.sync.get(['mwApiKey', 'deepLApiKey']);
+  const result = await chrome.storage.sync.get(['mwApiKey', 'deepLApiKey', TRANSLATE_TRIGGER_MODE_KEY]);
   cachedMWApiKey = result.mwApiKey || '';
   cachedDeepLApiKey = result.deepLApiKey || '';
+  cachedTranslateTriggerMode = normalizeTranslateTriggerMode(result[TRANSLATE_TRIGGER_MODE_KEY]);
   console.log('[Background] API Keys prefetched');
 }
 prefetchApiKeys();
@@ -115,7 +265,13 @@ prefetchApiKeys();
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync') {
     if (changes.mwApiKey) cachedMWApiKey = changes.mwApiKey.newValue;
-    if (changes.deepLApiKey) cachedDeepLApiKey = changes.deepLApiKey.newValue;
+    if (changes.deepLApiKey) {
+      cachedDeepLApiKey = changes.deepLApiKey.newValue;
+      clearDeepLQuotaState().catch(error => console.error('[Background] Failed to clear DeepL quota state:', error));
+    }
+    if (changes[TRANSLATE_TRIGGER_MODE_KEY]) {
+      cachedTranslateTriggerMode = normalizeTranslateTriggerMode(changes[TRANSLATE_TRIGGER_MODE_KEY].newValue);
+    }
   }
 });
 
@@ -146,6 +302,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     setDeepLApiKey: () => setDeepLApiKey(request.apiKey),
     getDeepLApiKey: () => getDeepLApiKey().then(apiKey => ({ apiKey: apiKey ? 'Configured' : '' })),
     getTranslationEngine: () => getDeepLApiKey().then(apiKey => ({ engine: apiKey ? 'DeepL' : 'Google' })),
+    getDeepLUsage: () => getDeepLUsage(),
+    clearTranslationCache: () => clearTranslationCache(),
+    getTranslationCacheStats: () => getTranslationCacheStats(),
+    getTranslationTriggerMode: () => getTranslationTriggerMode().then(mode => ({ mode })),
+    setTranslationTriggerMode: () => setTranslationTriggerMode(request.mode),
     setMWApiKey: () => setMWApiKey(request.apiKey),
     getMWApiKey: () => getMWApiKey().then(apiKey => ({ apiKey: apiKey ? 'Configured' : '' }))
   };
@@ -157,7 +318,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, data: data || null });
       } catch (error) {
         console.error(`[Background] Action ${request.action} failed:`, error);
-        sendResponse({ success: false, error: error.message || 'Unknown error' });
+        sendResponse({
+          success: false,
+          error: error.message || 'Unknown error',
+          errorCode: error.code || undefined
+        });
       }
     })();
     return true;
@@ -448,7 +613,80 @@ async function getDeepLApiKey() {
 async function setDeepLApiKey(apiKey) {
   await chrome.storage.sync.set({ deepLApiKey: apiKey });
   cachedDeepLApiKey = apiKey;
+  await clearDeepLQuotaState();
   return true;
+}
+
+async function getTranslationTriggerMode() {
+  if (cachedTranslateTriggerMode) return cachedTranslateTriggerMode;
+  const result = await chrome.storage.sync.get([TRANSLATE_TRIGGER_MODE_KEY]);
+  cachedTranslateTriggerMode = normalizeTranslateTriggerMode(result[TRANSLATE_TRIGGER_MODE_KEY]);
+  return cachedTranslateTriggerMode;
+}
+
+async function setTranslationTriggerMode(mode) {
+  const normalizedMode = normalizeTranslateTriggerMode(mode);
+  await chrome.storage.sync.set({ [TRANSLATE_TRIGGER_MODE_KEY]: normalizedMode });
+  cachedTranslateTriggerMode = normalizedMode;
+  return true;
+}
+
+function getDeepLBaseUrl(apiKey, path) {
+  const isPro = !apiKey.endsWith(':fx');
+  return isPro ? `https://api.deepl.com/v2/${path}` : `https://api-free.deepl.com/v2/${path}`;
+}
+
+async function getDeepLUsage() {
+  const apiKey = await getDeepLApiKey();
+  if (!apiKey) {
+    throw new TranslationError('Please configure DeepL API Key', 'MISSING_API_KEY');
+  }
+
+  const response = await fetchWithTimeout(getDeepLBaseUrl(apiKey, 'usage'), {
+    headers: {
+      'Authorization': `DeepL-Auth-Key ${apiKey}`
+    }
+  });
+
+  const contentType = response.headers.get('content-type');
+  const isJson = contentType && contentType.includes('application/json');
+  if (!response.ok) {
+    let errorMsg = `HTTP ${response.status}`;
+    if (isJson) {
+      const errorData = await response.json().catch(() => ({}));
+      errorMsg = errorData.message || errorMsg;
+    }
+    throw new TranslationError(`DeepL usage check failed: ${errorMsg}`, response.status === 456 ? 'QUOTA_EXCEEDED' : 'DEEPL_USAGE_FAILED');
+  }
+  if (!isJson) {
+    throw new TranslationError('DeepL usage check returned invalid format', 'DEEPL_USAGE_FAILED');
+  }
+
+  const usage = await response.json();
+  if (Number.isFinite(usage.character_count) && Number.isFinite(usage.character_limit)) {
+    if (usage.character_limit > usage.character_count) {
+      await clearDeepLQuotaState();
+    }
+    usage.remaining = Math.max(0, usage.character_limit - usage.character_count);
+  }
+  usage.quotaState = deepLQuotaState?.status || 'ok';
+  return usage;
+}
+
+async function clearTranslationCache() {
+  translationCache.clear();
+  await chrome.storage.local.remove(TRANSLATION_CACHE_STORAGE_KEY);
+  return true;
+}
+
+async function getTranslationCacheStats() {
+  await translationStateReady;
+  pruneTranslationCache();
+  return {
+    entries: translationCache.size,
+    maxEntries: TRANSLATION_CACHE_MAX_SIZE,
+    ttlDays: Math.round(TRANSLATION_CACHE_TTL / (24 * 60 * 60 * 1000))
+  };
 }
 
 // Language code conversion (Chrome -> DeepL)
@@ -486,12 +724,7 @@ function convertToDeepLLang(lang) {
 async function translateWithDeepL(text, targetLang, apiKey) {
   const deepLLang = convertToDeepLLang(targetLang);
 
-  // Auto-detect Pro or Free version API
-  // Free version keys usually end with :fx
-  const isPro = !apiKey.endsWith(':fx');
-  const baseUrl = isPro ? 'https://api.deepl.com/v2/translate' : 'https://api-free.deepl.com/v2/translate';
-
-  const response = await fetchWithTimeout(baseUrl, {
+  const response = await fetchWithTimeout(getDeepLBaseUrl(apiKey, 'translate'), {
     method: 'POST',
     headers: {
       'Authorization': `DeepL-Auth-Key ${apiKey}`,
@@ -516,7 +749,10 @@ async function translateWithDeepL(text, targetLang, apiKey) {
       const errorText = await response.text().catch(() => '');
       console.error('DeepL non-JSON error response:', errorText);
     }
-    throw new Error(`DeepL Translation Failed: ${errorMsg}`);
+    if (response.status === 456) {
+      throw new TranslationError('DeepL quota exceeded. Please wait for quota reset or update your API plan.', 'QUOTA_EXCEEDED');
+    }
+    throw new TranslationError(`DeepL Translation Failed: ${errorMsg}`, 'DEEPL_TRANSLATION_FAILED');
   }
 
   if (!isJson) {
@@ -529,6 +765,7 @@ async function translateWithDeepL(text, targetLang, apiKey) {
     return {
       original: text,
       translated: data.translations[0].text,
+      targetLang: targetLang,
       sourceLang: data.translations[0].detected_source_language || 'auto',
       engine: 'DeepL'
     };
@@ -545,14 +782,29 @@ async function translateWithDeepL(text, targetLang, apiKey) {
  * @returns {Promise<Object>}
  */
 async function translateText(text, targetLang) {
-  if (!text || !text.trim()) return null;
+  const trimmedText = (text || '').trim();
+  if (!trimmedText) return null;
+  if (trimmedText.length > MAX_TRANSLATION_TEXT_CHARS) {
+    throw new TranslationError('Selected text exceeds 500 characters. Please shorten the selection.', 'TEXT_TOO_LONG');
+  }
+
+  await translationStateReady;
+  const cacheKey = createTranslationCacheKey(targetLang, trimmedText);
+  const cachedTranslation = getCachedTranslation(cacheKey);
+  if (cachedTranslation) {
+    return cachedTranslation;
+  }
+
+  if (isDeepLQuotaBlocked()) {
+    throw new TranslationError('DeepL quota exceeded. Please wait for quota reset or update your API plan.', 'QUOTA_EXCEEDED');
+  }
+
   const apiKey = await getDeepLApiKey();
 
   if (!apiKey) {
-    throw new Error('Please configure DeepL API Key');
+    throw new TranslationError('Please configure DeepL API Key', 'MISSING_API_KEY');
   }
 
-  const cacheKey = `${targetLang}:${text.trim()}`;
   if (pendingTranslationRequests.has(cacheKey)) {
     return pendingTranslationRequests.get(cacheKey);
   }
@@ -560,7 +812,14 @@ async function translateText(text, targetLang) {
   const requestPromise = (async () => {
     try {
       console.log('[Translation] Using DeepL engine');
-      return await translateWithDeepL(text, targetLang, apiKey);
+      const translated = await translateWithDeepL(trimmedText, targetLang, apiKey);
+      setCachedTranslation(cacheKey, translated);
+      return translated;
+    } catch (error) {
+      if (error.code === 'QUOTA_EXCEEDED') {
+        await setDeepLQuotaExceeded();
+      }
+      throw error;
     } finally {
       pendingTranslationRequests.delete(cacheKey);
     }

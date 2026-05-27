@@ -265,6 +265,34 @@ export async function sendMessageSafe(message, timeoutMs = 15000) {
 }
 
 const definitionTranslationCache = new Map();
+const DEFAULT_TRANSLATE_TRIGGER_MODE = 'click';
+
+function normalizeTranslateTriggerMode(mode) {
+    return mode === 'hover' ? 'hover' : DEFAULT_TRANSLATE_TRIGGER_MODE;
+}
+
+async function resolveTranslateTriggerMode(explicitMode) {
+    if (explicitMode) return normalizeTranslateTriggerMode(explicitMode);
+
+    const response = await sendMessageSafe({ action: 'getTranslationTriggerMode' }, 1000);
+    if (response && response.success && response.data) {
+        return normalizeTranslateTriggerMode(response.data.mode);
+    }
+    return DEFAULT_TRANSLATE_TRIGGER_MODE;
+}
+
+function getFriendlyTranslationError(result) {
+    if (result && result.errorCode === 'TEXT_TOO_LONG') {
+        return 'Selected text exceeds 500 characters. Please shorten the selection.';
+    }
+    if (result && result.errorCode === 'QUOTA_EXCEEDED') {
+        return 'DeepL quota exceeded. Please wait for quota reset or update your API plan.';
+    }
+    if (result && result.error === 'Please configure DeepL API Key') {
+        return 'Please configure a DeepL API Key in extension options';
+    }
+    return (result && result.error) || 'Translation unavailable';
+}
 
 /**
  * Retrieves or creates a cached translation request for a dictionary definition.
@@ -306,28 +334,45 @@ export function createDefinitionPair(definitionText) {
 
     const chinese = document.createElement('div');
     chinese.className = 'translator-definition translator-definition-zh';
-    chinese.textContent = trimmed ? 'Translating…' : '—';
     chinese.dataset.definitionKey = trimmed;
     pair.appendChild(chinese);
 
     if (trimmed) {
-        getDefinitionTranslationPromise(trimmed).then(result => {
-            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
-            if (result && result.success && result.data && result.data.translated) {
-                chinese.textContent = result.data.translated;
-                chinese.classList.remove('translator-definition-zh-error');
-            } else {
-                const localizedError = (result && result.error === 'Please configure DeepL API Key')
-                    ? 'Please configure a DeepL API Key in extension options'
-                    : (result && result.error) || 'Translation unavailable';
-                chinese.textContent = localizedError;
+        const translateButton = document.createElement('button');
+        translateButton.type = 'button';
+        translateButton.className = 'translator-translate-definition-btn';
+        translateButton.textContent = 'Translate';
+
+        const resultText = document.createElement('div');
+        resultText.className = 'translator-definition-translation-result';
+        resultText.textContent = 'Click Translate to save DeepL quota.';
+
+        translateButton.addEventListener('click', async event => {
+            event.stopPropagation();
+            translateButton.disabled = true;
+            resultText.textContent = 'Translating…';
+            try {
+                const result = await getDefinitionTranslationPromise(trimmed);
+                if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+                if (result && result.success && result.data && result.data.translated) {
+                    resultText.textContent = result.data.translated;
+                    chinese.classList.remove('translator-definition-zh-error');
+                } else {
+                    resultText.textContent = getFriendlyTranslationError(result);
+                    chinese.classList.add('translator-definition-zh-error');
+                    translateButton.disabled = false;
+                }
+            } catch {
+                if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+                resultText.textContent = 'Translation failed';
                 chinese.classList.add('translator-definition-zh-error');
+                translateButton.disabled = false;
             }
-        }).catch(() => {
-            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
-            chinese.textContent = 'Translation failed';
-            chinese.classList.add('translator-definition-zh-error');
         });
+
+        chinese.append(translateButton, resultText);
+    } else {
+        chinese.textContent = '—';
     }
 
     return pair;
@@ -587,7 +632,8 @@ export async function showSentencePopup(x, y, options = {}) {
  * @returns {Promise<HTMLElement|null>}
  */
 export async function showSelectionToolbar(options) {
-    const { text, x, y, onTranslate, minTop = 44 } = options;
+    const { text, x, y, onTranslate, minTop = 44, translateTriggerMode } = options;
+    const resolvedTriggerMode = await resolveTranslateTriggerMode(translateTriggerMode);
     removeFloatButtons();
 
     const root = await ensureShadowRoot();
@@ -608,8 +654,15 @@ export async function showSelectionToolbar(options) {
     const transBtn = document.createElement('button');
     transBtn.className = 'translator-float-btn translate-btn';
     transBtn.textContent = 'T';
-    transBtn.setAttribute('data-tooltip', 'Translate');
-    transBtn.onmouseenter = () => onTranslate(text, x, y);
+    transBtn.setAttribute('data-tooltip', resolvedTriggerMode === 'hover' ? 'Hover to translate' : 'Click to translate');
+    if (resolvedTriggerMode === 'hover') {
+        transBtn.onmouseenter = () => onTranslate(text, x, y);
+    } else {
+        transBtn.onclick = event => {
+            event.stopPropagation();
+            onTranslate(text, x, y);
+        };
+    }
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'translator-float-btn close-floating-btn';

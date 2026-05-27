@@ -82,6 +82,9 @@ test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPat
     assert.equal(toolbar.style.top !== '', true);
 
     translateButton.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: true }));
+    assert.deepEqual(translateCalls, []);
+
+    translateButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 
     assert.deepEqual(translateCalls, [{
         text: 'The quick brown fox',
@@ -90,6 +93,31 @@ test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPat
     }]);
     assert.equal(isTranslatorUiClickPath([translateButton, toolbar]), true);
     assert.equal(isTranslatorUiClickPath([outsideElement]), false);
+});
+
+test('showSelectionToolbar can opt into hover translation trigger mode', async () => {
+    const translateCalls = [];
+
+    await showSelectionToolbar({
+        text: 'The quick brown fox',
+        x: 180,
+        y: 220,
+        translateTriggerMode: 'hover',
+        onTranslate: (text, x, y) => {
+            translateCalls.push({ text, x, y });
+        }
+    });
+
+    const shadowRoot = getShadowRoot();
+    const translateButton = shadowRoot.querySelector('.translator-float-btn.translate-btn');
+
+    translateButton.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: true }));
+
+    assert.deepEqual(translateCalls, [{
+        text: 'The quick brown fox',
+        x: 180,
+        y: 220
+    }]);
 });
 
 test('dismissTranslatorUiOnOutsideEvent closes popup during capture before page stops propagation', async () => {

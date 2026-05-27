@@ -15,6 +15,8 @@ import {
     showSentencePopup
 } from './utils.js';
 
+const MAX_TRANSLATION_TEXT_CHARS = 500;
+
 function createWordPopup(word, x, y, popupWidth, popupHeight) {
     const popup = document.createElement('div');
     popup.className = 'translator-popup';
@@ -259,6 +261,11 @@ export async function handleSelectionTranslation({
         loadingText
     });
     if (!popup || !content) return null;
+
+    if (text.trim().length > MAX_TRANSLATION_TEXT_CHARS) {
+        content.textContent = 'Selected text exceeds 500 characters. Please shorten the selection.';
+        return popup;
+    }
 
     const response = await sendMessageSafe({ action: 'translate', text });
     if (!isContextValid() || getCurrentPopup() !== popup) {

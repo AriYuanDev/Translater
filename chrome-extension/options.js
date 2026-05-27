@@ -29,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMessage = document.getElementById('statusMessage');
     const currentEngine = document.getElementById('currentEngine');
     const toast = document.getElementById('toast');
+    const clickTriggerToggle = document.getElementById('clickTriggerToggle');
+    const deepLUsageStatus = document.getElementById('deepLUsageStatus');
+    const refreshUsageBtn = document.getElementById('refreshUsageBtn');
+    const translationCacheStatus = document.getElementById('translationCacheStatus');
+    const clearTranslationCacheBtn = document.getElementById('clearTranslationCacheBtn');
 
     // Merriam-Webster elements
     const mwApiKeyInput = document.getElementById('mwApiKey');
@@ -39,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load current status
     loadCurrentStatus();
     loadMWStatus();
+    loadTriggerMode();
+    loadDeepLUsage();
+    loadTranslationCacheStats();
 
     // ==================== DeepL API ====================
 
@@ -74,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('✅ DeepL API key saved and verified');
                 apiKeyInput.value = '';
                 loadCurrentStatus();
+                loadDeepLUsage();
             } else {
                 showStatus('API key verification failed: ' + testResult.error, 'warning');
             }
@@ -94,6 +103,36 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             showToast('🗑️ DeepL API key cleared');
             loadCurrentStatus();
+            loadDeepLUsage();
+        }
+    });
+
+    clickTriggerToggle.addEventListener('change', async () => {
+        const mode = clickTriggerToggle.checked ? 'click' : 'hover';
+        const response = await sendMessageSafe({
+            action: 'setTranslationTriggerMode',
+            mode
+        });
+        if (response && response.success) {
+            showToast(mode === 'click' ? 'Click-to-translate enabled' : 'Hover-to-translate enabled');
+        } else {
+            showStatus((response && response.error) || 'Failed to save trigger mode', 'warning');
+            clickTriggerToggle.checked = mode !== 'click';
+        }
+    });
+
+    refreshUsageBtn.addEventListener('click', () => {
+        loadDeepLUsage();
+    });
+
+    clearTranslationCacheBtn.addEventListener('click', async () => {
+        if (!confirm('Clear stored translation cache? This may increase future DeepL usage.')) return;
+        const response = await sendMessageSafe({ action: 'clearTranslationCache' });
+        if (response && response.success) {
+            showToast('Translation cache cleared');
+            loadTranslationCacheStats();
+        } else {
+            showStatus((response && response.error) || 'Failed to clear translation cache', 'warning');
         }
     });
 
@@ -191,6 +230,53 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Failed to load MW status:', error);
+        }
+    }
+
+    async function loadTriggerMode() {
+        try {
+            const response = await sendMessageSafe({ action: 'getTranslationTriggerMode' });
+            const mode = response && response.success && response.data ? response.data.mode : 'click';
+            clickTriggerToggle.checked = mode !== 'hover';
+        } catch (error) {
+            console.error('Failed to load trigger mode:', error);
+            clickTriggerToggle.checked = true;
+        }
+    }
+
+    async function loadDeepLUsage() {
+        deepLUsageStatus.textContent = 'Checking usage...';
+        try {
+            const response = await sendMessageSafe({ action: 'getDeepLUsage' });
+            if (!response || !response.success || !response.data) {
+                deepLUsageStatus.textContent = (response && response.error) || 'DeepL usage unavailable.';
+                return;
+            }
+
+            const { character_count, character_limit, remaining, quotaState } = response.data;
+            if (Number.isFinite(character_count) && Number.isFinite(character_limit)) {
+                const safeRemaining = Number.isFinite(remaining)
+                    ? remaining
+                    : Math.max(0, character_limit - character_count);
+                deepLUsageStatus.textContent = `${character_count} / ${character_limit} chars used. ${safeRemaining} remaining. Quota state: ${quotaState || 'ok'}.`;
+            } else {
+                deepLUsageStatus.textContent = 'Usage returned without character counts.';
+            }
+        } catch (error) {
+            deepLUsageStatus.textContent = error.message || 'DeepL usage unavailable.';
+        }
+    }
+
+    async function loadTranslationCacheStats() {
+        try {
+            const response = await sendMessageSafe({ action: 'getTranslationCacheStats' });
+            if (response && response.success && response.data) {
+                translationCacheStatus.textContent = `${response.data.entries} / ${response.data.maxEntries} cached translations. TTL: ${response.data.ttlDays} days.`;
+            } else {
+                translationCacheStatus.textContent = (response && response.error) || 'Cache status unavailable.';
+            }
+        } catch (error) {
+            translationCacheStatus.textContent = error.message || 'Cache status unavailable.';
         }
     }
 
