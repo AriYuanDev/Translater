@@ -110,6 +110,42 @@ test('handleWordLookupInteraction does not auto-translate definitions and transl
     assert.match(getShadowText(), /支持释义/);
 });
 
+test('handleWordLookupInteraction waits for a speaker click before playing dictionary audio', async () => {
+    const AudioStub = installAudioStub();
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('support'),
+                    phonetics: [{ audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/s/support.mp3' }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.deepEqual(AudioStub.playCalls, []);
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, [
+        'https://media.merriam-webster.com/audio/prons/en/us/mp3/s/support.mp3'
+    ]);
+});
+
 test('handleSelectionTranslation surfaces long text guard errors without generic copy', async () => {
     installChromeStub(message => {
         if (message.action === 'translate') {

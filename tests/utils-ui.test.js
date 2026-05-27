@@ -10,9 +10,11 @@ import {
     getFreshSelectionText,
     getTextSelectionAction,
     isTranslatorUiClickPath,
+    preloadSpeechVoices,
     setCurrentPopup,
     shouldHandleMouseSelectionRelease,
-    showSelectionToolbar
+    showSelectionToolbar,
+    speakText
 } from '../chrome-extension/utils.js';
 import {
     installChromeStub,
@@ -59,8 +61,75 @@ test('getFreshSelectionText falls back to a recent cached selection', () => {
     assert.equal(getFreshSelectionText('', '', 1000, 1200), '');
 });
 
+test('speakText works from the global speech API when the page window property is unavailable', async () => {
+    installChromeStub(message => {
+        if (message.action === 'speakText') {
+            return { success: false, errorCode: 'TTS_UNAVAILABLE' };
+        }
+        return undefined;
+    });
+    const speech = speechSynthesis;
+    window.speechSynthesis = undefined;
+
+    await speakText('Hello from ChatGPT');
+
+    assert.equal(speech.speakCalls.length, 1);
+    assert.equal(speech.speakCalls[0].text, 'Hello from ChatGPT');
+    assert.equal(speech.speakCalls[0].voice.name, 'Samantha');
+});
+
+test('speakText uses background Chrome TTS before Web Speech fallback', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'speakText') {
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        return undefined;
+    });
+
+    await speakText('Hello from the background');
+
+    assert.deepEqual(messages, [{
+        action: 'speakText',
+        text: 'Hello from the background',
+        options: {}
+    }]);
+    assert.equal(speechSynthesis.speakCalls.length, 0);
+});
+
+test('speakText resumes a paused speech engine before speaking', async () => {
+    installChromeStub(message => {
+        if (message.action === 'speakText') {
+            return { success: false, errorCode: 'TTS_UNAVAILABLE' };
+        }
+        return undefined;
+    });
+    const speech = speechSynthesis;
+    speech.pending = true;
+    speech.paused = true;
+
+    await speakText('Resume speech');
+
+    assert.equal(speech.cancelCalls, 1);
+    assert.equal(speech.resumeCalls >= 2, true);
+    assert.equal(speech.speakCalls.length, 1);
+});
+
+test('preloadSpeechVoices warms the speech engine when available', () => {
+    assert.equal(preloadSpeechVoices(), true);
+});
+
 test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPath recognizes its buttons', async () => {
     const translateCalls = [];
+    const speakMessages = [];
+    installChromeStub(message => {
+        if (message.action === 'speakText') {
+            speakMessages.push(message);
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        return undefined;
+    });
 
     await showSelectionToolbar({
         text: 'The quick brown fox',
@@ -73,13 +142,23 @@ test('showSelectionToolbar renders the shared toolbar and isTranslatorUiClickPat
 
     const shadowRoot = getShadowRoot();
     const toolbar = shadowRoot.querySelector('.translator-float-buttons');
+    const speakButton = shadowRoot.querySelector('.translator-float-btn.speak-btn');
     const translateButton = shadowRoot.querySelector('.translator-float-btn.translate-btn');
     const outsideElement = document.createElement('div');
 
     assert.ok(toolbar);
+    assert.ok(speakButton);
     assert.ok(translateButton);
     assert.equal(toolbar.style.left !== '', true);
     assert.equal(toolbar.style.top !== '', true);
+
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(speakMessages, [{
+        action: 'speakText',
+        text: 'The quick brown fox',
+        options: {}
+    }]);
 
     translateButton.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: true }));
     assert.deepEqual(translateCalls, []);

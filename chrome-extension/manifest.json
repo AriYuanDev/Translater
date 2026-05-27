@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "webNavigation",
-    "storage"
+    "storage",
+    "tts"
   ],
   "host_permissions": [
     "https://dictionary.cambridge.org/*",

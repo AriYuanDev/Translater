@@ -33,7 +33,9 @@
         shouldHandleMouseSelectionRelease,
         dismissTranslatorUiOnOutsideEvent,
         dismissTranslatorUiOnFrameBlur,
-        showSelectionToolbar
+        showSelectionToolbar,
+        speakText,
+        preloadSpeechVoices
     } = utils;
 
     const {
@@ -103,12 +105,8 @@
         }, delayMs);
     }
 
-    // Preload speech engine
-    if (typeof speechSynthesis !== 'undefined') {
-        speechSynthesis.getVoices();
-        speechSynthesis.addEventListener('voiceschanged', () => {
-            console.log('[Translater] Speech engine ready');
-        }, { once: true });
+    if (preloadSpeechVoices()) {
+        console.log('[Translater] Speech engine ready');
     }
 
     // ==================== Shadow DOM Setup ====================
@@ -123,6 +121,10 @@
         const word = selection.toString().trim();
 
         if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
+
+        void speakText(word).catch(error => {
+            console.warn('[Translater] Speak failed:', error);
+        });
 
         await handleWordLookupInteraction({
             word,

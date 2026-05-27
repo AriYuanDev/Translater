@@ -36,9 +36,7 @@ function createWordPopup(word, x, y, popupWidth, popupHeight) {
     wordInfo.appendChild(wordSpan);
 
     header.appendChild(wordInfo);
-    header.appendChild(createSpeakButton(() => {
-        speakText(word);
-    }));
+    header.appendChild(createSpeakButton(() => speakText(word)));
 
     const meanings = document.createElement('div');
     meanings.className = 'translator-meanings';
@@ -117,7 +115,9 @@ function updateWordPopupWithData(popup, data, word) {
         miniSpeakButton.innerHTML = createSpeakerSVG();
         miniSpeakButton.onclick = event => {
             event.stopPropagation();
-            speakText(word);
+            void speakText(word).catch(error => {
+                console.warn('[Translater] Speak failed:', error);
+            });
         };
 
         sourceSpan.appendChild(miniSpeakButton);
@@ -172,6 +172,19 @@ function updateWordPopupWithData(popup, data, word) {
     content.appendChild(meanings);
 }
 
+function getAudioCtor() {
+    if (typeof globalThis !== 'undefined' && globalThis.Audio) {
+        return globalThis.Audio;
+    }
+    if (typeof window !== 'undefined' && window.Audio) {
+        return window.Audio;
+    }
+    if (typeof Audio !== 'undefined') {
+        return Audio;
+    }
+    return null;
+}
+
 async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?.phonetics)) {
     const isMorphed = data?.word && word && data.word.toLowerCase() !== word.toLowerCase();
 
@@ -186,7 +199,12 @@ async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?
     }
 
     try {
-        await new Audio(bestAudioUrl).play();
+        const AudioCtor = getAudioCtor();
+        if (!AudioCtor) {
+            await speakText(word);
+            return;
+        }
+        await new AudioCtor(bestAudioUrl).play();
     } catch {
         await speakText(word);
     }
@@ -221,7 +239,6 @@ export async function handleWordLookupInteraction({
 
     if (response && response.success && response.data) {
         updateWordPopupWithData(popup, response.data, word);
-        void playLookupAudio(response.data, word).catch(() => {});
         return popup;
     }
 
@@ -237,7 +254,6 @@ export async function handleWordLookupInteraction({
 
     if (translation && translation.success && translation.data) {
         updateWordPopupWithTranslation(popup, translation.data.translated || 'No results');
-        void speakText(word).catch(() => {});
     } else {
         updateWordPopupWithError(popup, (translation && translation.error) || 'Query failed');
     }

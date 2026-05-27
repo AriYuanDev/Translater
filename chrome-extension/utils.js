@@ -378,61 +378,136 @@ export function createDefinitionPair(definitionText) {
     return pair;
 }
 
-// Ensure speech voices are loaded with timeout protection
-function waitForVoices(timeoutMs = 3000) {
-    return new Promise((resolve) => {
-        const speechApi = window.speechSynthesis;
-        const voices = speechApi.getVoices();
-        if (voices.length > 0) {
-            resolve(voices);
-            return;
+let cachedSpeechVoices = [];
+
+function getSpeechSynthesisApi() {
+    if (typeof globalThis !== 'undefined' && globalThis.speechSynthesis) {
+        return globalThis.speechSynthesis;
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+        return window.speechSynthesis;
+    }
+    if (typeof speechSynthesis !== 'undefined') {
+        return speechSynthesis;
+    }
+    return null;
+}
+
+function getSpeechSynthesisUtteranceCtor() {
+    if (typeof globalThis !== 'undefined' && globalThis.SpeechSynthesisUtterance) {
+        return globalThis.SpeechSynthesisUtterance;
+    }
+    if (typeof window !== 'undefined' && window.SpeechSynthesisUtterance) {
+        return window.SpeechSynthesisUtterance;
+    }
+    if (typeof SpeechSynthesisUtterance !== 'undefined') {
+        return SpeechSynthesisUtterance;
+    }
+    return null;
+}
+
+function refreshSpeechVoices(speechApi) {
+    if (!speechApi || typeof speechApi.getVoices !== 'function') {
+        return cachedSpeechVoices;
+    }
+
+    const voices = speechApi.getVoices();
+    if (voices.length > 0) {
+        cachedSpeechVoices = voices;
+    }
+    return cachedSpeechVoices;
+}
+
+function findPreferredSpeechVoice(voices) {
+    return voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
+        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
+        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
+        || voices.find(v => v.lang.startsWith('en-US'))
+        || voices.find(v => v.lang.startsWith('en'));
+}
+
+function resumeSpeechIfPaused(speechApi) {
+    if (typeof speechApi.resume !== 'function') return;
+
+    speechApi.resume();
+    setTimeout(() => {
+        if (speechApi.paused) {
+            speechApi.resume();
         }
+    }, 0);
+}
 
-        let settled = false;
-        let timeoutId = null;
+export function preloadSpeechVoices() {
+    const speechApi = getSpeechSynthesisApi();
+    if (!speechApi || !getSpeechSynthesisUtteranceCtor()) return false;
 
-        const cleanup = () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-            if (typeof speechApi.removeEventListener === 'function') {
-                speechApi.removeEventListener('voiceschanged', handler);
-            }
-        };
+    refreshSpeechVoices(speechApi);
 
-        const finish = () => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            resolve(speechApi.getVoices());
-        };
+    if (typeof speechApi.addEventListener === 'function') {
+        speechApi.addEventListener('voiceschanged', () => {
+            refreshSpeechVoices(speechApi);
+        }, { once: true });
+    }
 
-        const handler = () => {
-            finish();
-        };
+    return true;
+}
 
-        timeoutId = setTimeout(finish, timeoutMs);
+async function speakTextWithExtensionTts(text, options) {
+    if (typeof chrome === 'undefined'
+        || !chrome.runtime
+        || typeof chrome.runtime.sendMessage !== 'function') {
+        return false;
+    }
 
-        if (typeof speechApi.addEventListener === 'function') {
-            speechApi.addEventListener('voiceschanged', handler);
-        } else {
-            const previousHandler = speechApi.onvoiceschanged;
-            speechApi.onvoiceschanged = (event) => {
-                if (typeof previousHandler === 'function') {
-                    previousHandler.call(speechApi, event);
-                }
-                finish();
-            };
-        }
+    const response = await sendMessageSafe({
+        action: 'speakText',
+        text,
+        options
+    }, 3000);
 
-        speechApi.getVoices();
-    });
+    if (response && response.success) {
+        return true;
+    }
+
+    if (response?.errorCode && response.errorCode !== 'TTS_UNAVAILABLE') {
+        console.warn('[Translater] Chrome TTS failed:', response.error || response.errorCode);
+    }
+    return false;
+}
+
+function speakTextWithWebSpeech(text, options = {}) {
+    const speechApi = getSpeechSynthesisApi();
+    const Utterance = getSpeechSynthesisUtteranceCtor();
+    if (!speechApi || !Utterance || typeof speechApi.speak !== 'function') {
+        return false;
+    }
+
+    if ((speechApi.speaking || speechApi.pending || speechApi.paused) && typeof speechApi.cancel === 'function') {
+        speechApi.cancel();
+    }
+    resumeSpeechIfPaused(speechApi);
+
+    const { lang = 'en-US', rate = 1.0, pitch = 1.0, volume = 0.8 } = options;
+    const utterance = new Utterance(text);
+    utterance.lang = lang;
+    utterance.rate = rate;
+    utterance.pitch = pitch;
+    utterance.volume = volume;
+
+    const usVoice = findPreferredSpeechVoice(refreshSpeechVoices(speechApi));
+
+    if (usVoice) {
+        utterance.voice = usVoice;
+    }
+
+    speechApi.speak(utterance);
+    resumeSpeechIfPaused(speechApi);
+    return true;
 }
 
 // Generic TTS speech driver
 /**
- * Uses the Web Speech API to speak the given text.
+ * Speaks the given text through extension TTS, with Web Speech as a fallback.
  * @param {string} text - The text to speak.
  * @param {Object} [options={}] - Speech options (lang, rate, pitch).
  * @returns {Promise<void>}
@@ -440,30 +515,12 @@ function waitForVoices(timeoutMs = 3000) {
 export async function speakText(text, options = {}) {
     if (!text) return;
 
-    if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
+    const spokeWithExtensionTts = await speakTextWithExtensionTts(text, options);
+    if (spokeWithExtensionTts) {
+        return;
     }
 
-    const { lang = 'en-US', rate = 1.0, pitch = 1.0, volume = 0.8 } = options;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = rate;
-    utterance.pitch = pitch;
-    utterance.volume = volume;
-
-    // Select the best voice
-    const voices = await waitForVoices();
-    const usVoice = voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
-        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
-        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
-        || voices.find(v => v.lang.startsWith('en-US'))
-        || voices.find(v => v.lang.startsWith('en'));
-
-    if (usVoice) {
-        utterance.voice = usVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
+    speakTextWithWebSpeech(text, options);
 }
 
 /**
@@ -572,7 +629,9 @@ export function createSpeakButton(onClick) {
     if (onClick) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            onClick();
+            Promise.resolve(onClick()).catch(error => {
+                console.warn('[Translater] Speak failed:', error);
+            });
         });
     }
     return btn;
@@ -649,7 +708,12 @@ export async function showSelectionToolbar(options) {
     speakBtn.className = 'translator-float-btn speak-btn';
     speakBtn.innerHTML = createSpeakerSVG();
     speakBtn.setAttribute('data-tooltip', 'Speak');
-    speakBtn.onclick = () => speakText(text);
+    speakBtn.onclick = event => {
+        event.stopPropagation();
+        void speakText(text).catch(error => {
+            console.warn('[Translater] Speak failed:', error);
+        });
+    };
 
     const transBtn = document.createElement('button');
     transBtn.className = 'translator-float-btn translate-btn';

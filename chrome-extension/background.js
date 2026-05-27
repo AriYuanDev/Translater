@@ -307,6 +307,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     getTranslationCacheStats: () => getTranslationCacheStats(),
     getTranslationTriggerMode: () => getTranslationTriggerMode().then(mode => ({ mode })),
     setTranslationTriggerMode: () => setTranslationTriggerMode(request.mode),
+    speakText: () => speakTextWithChromeTts(request.text, request.options || {}),
     setMWApiKey: () => setMWApiKey(request.apiKey),
     getMWApiKey: () => getMWApiKey().then(apiKey => ({ apiKey: apiKey ? 'Configured' : '' }))
   };
@@ -328,6 +329,127 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+// ==================== Chrome TTS ====================
+
+function createBackgroundError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function getChromeTtsVoices() {
+  if (!chrome.tts || typeof chrome.tts.getVoices !== 'function') {
+    return Promise.resolve([]);
+  }
+
+  return new Promise(resolve => {
+    chrome.tts.getVoices(voices => {
+      resolve(Array.isArray(voices) ? voices : []);
+    });
+  });
+}
+
+function looksLikeExtensionId(value) {
+  return /^[a-p]{32}$/.test(String(value || ''));
+}
+
+function normalizeLanguage(value) {
+  return String(value || '').toLowerCase();
+}
+
+function scoreChromeTtsVoice(voice, targetLang) {
+  const voiceLang = normalizeLanguage(voice.lang);
+  const target = normalizeLanguage(targetLang || 'en-US');
+  const targetBase = target.split('-')[0];
+  const voiceName = String(voice.voiceName || '');
+  const lowerName = voiceName.toLowerCase();
+  let score = 0;
+
+  if (!voiceName || looksLikeExtensionId(voiceName)) score -= 1000;
+  if (looksLikeExtensionId(voice.extensionId)) score -= 120;
+  if (!voice.extensionId) score += 120;
+  if (voice.remote === false) score += 30;
+
+  if (voiceLang === target) score += 90;
+  else if (voiceLang.startsWith(`${targetBase}-`)) score += 60;
+  else if (voiceLang.startsWith('en')) score += 25;
+  else score -= 200;
+
+  if (lowerName.includes('samantha')) score += 45;
+  if (lowerName.includes('alex')) score += 40;
+  if (lowerName.includes('google us english')) score += 35;
+  if (lowerName.includes('english') || lowerName.includes('en-us')) score += 15;
+  if (lowerName.includes('compact')) score -= 10;
+
+  return score;
+}
+
+function chooseChromeTtsVoice(voices, targetLang) {
+  const candidates = voices
+    .filter(voice => voice && typeof voice.voiceName === 'string')
+    .map(voice => ({
+      voice,
+      score: scoreChromeTtsVoice(voice, targetLang)
+    }))
+    .filter(candidate => candidate.score > -100)
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.voice || null;
+}
+
+async function speakTextWithChromeTts(text, options = {}) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return { spoken: false };
+
+  if (!chrome.tts || typeof chrome.tts.speak !== 'function') {
+    throw createBackgroundError('Chrome TTS is unavailable.', 'TTS_UNAVAILABLE');
+  }
+
+  const {
+    lang = 'en-US',
+    rate = 1.0,
+    pitch = 1.0,
+    volume = 0.8
+  } = options;
+
+  const voices = await getChromeTtsVoices();
+  const preferredVoice = chooseChromeTtsVoice(voices, lang);
+  if (voices.length > 0 && !preferredVoice) {
+    throw createBackgroundError('No usable English Chrome TTS voice found.', 'TTS_UNAVAILABLE');
+  }
+
+  const ttsOptions = {
+    lang,
+    rate,
+    pitch,
+    volume,
+    enqueue: false
+  };
+
+  if (preferredVoice) {
+    ttsOptions.voiceName = preferredVoice.voiceName;
+  }
+
+  return new Promise((resolve, reject) => {
+    if (typeof chrome.tts.stop === 'function') {
+      chrome.tts.stop();
+    }
+
+    chrome.tts.speak(trimmed, ttsOptions, () => {
+      const lastError = chrome.runtime.lastError;
+      if (lastError) {
+        reject(createBackgroundError(lastError.message || 'Chrome TTS failed.', 'TTS_FAILED'));
+        return;
+      }
+      resolve({
+        spoken: true,
+        provider: 'chrome.tts',
+        voiceName: preferredVoice?.voiceName || ''
+      });
+    });
+  });
+}
 
 // ==================== Merriam-Webster API Configuration ====================
 
