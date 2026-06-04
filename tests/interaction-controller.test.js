@@ -187,6 +187,32 @@ test('handleWordLookupInteraction falls back to translation when dictionary retu
     assert.match(getShadowText(), /支持/);
 });
 
+test('handleWordLookupInteraction falls back to translation when dictionary data has no definitions', async () => {
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    word: 'support',
+                    meanings: [{ partOfSpeech: 'noun' }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.match(getShadowText(), /支持/);
+});
+
 test('handleWordLookupInteraction shows an error when dictionary and translation both fail', async () => {
     installChromeStub(message => {
         if (message.action === 'fetchDictionary') {

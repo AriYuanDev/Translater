@@ -85,6 +85,32 @@ function updateWordPopupWithTranslation(popup, translatedText) {
     meanings.appendChild(result);
 }
 
+function getRenderableMeanings(data) {
+    if (!Array.isArray(data?.meanings)) return [];
+
+    return data.meanings
+        .map(meaning => {
+            const definitions = Array.isArray(meaning?.definitions)
+                ? meaning.definitions
+                    .map(definition => ({
+                        definition: String(definition?.definition || '').trim(),
+                        example: String(definition?.example || '').trim()
+                    }))
+                    .filter(definition => definition.definition)
+                : [];
+
+            return {
+                partOfSpeech: String(meaning?.partOfSpeech || 'word'),
+                definitions
+            };
+        })
+        .filter(meaning => meaning.definitions.length > 0);
+}
+
+function hasRenderableDictionaryData(data) {
+    return getRenderableMeanings(data).length > 0;
+}
+
 function updateWordPopupWithData(popup, data, word) {
     if (!popup || !data) return;
 
@@ -138,9 +164,10 @@ function updateWordPopupWithData(popup, data, word) {
 
     const meanings = document.createElement('div');
     meanings.className = 'translator-meanings';
+    const renderableMeanings = getRenderableMeanings(data);
 
-    if (data.meanings?.length) {
-        data.meanings.slice(0, 3).forEach(meaning => {
+    if (renderableMeanings.length) {
+        renderableMeanings.slice(0, 3).forEach(meaning => {
             const item = document.createElement('div');
             item.className = 'translator-meaning-item';
 
@@ -237,7 +264,7 @@ export async function handleWordLookupInteraction({
         return popup;
     }
 
-    if (response && response.success && response.data) {
+    if (response && response.success && hasRenderableDictionaryData(response.data)) {
         updateWordPopupWithData(popup, response.data, word);
         return popup;
     }
