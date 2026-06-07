@@ -17,6 +17,14 @@ import {
 
 const MAX_TRANSLATION_TEXT_CHARS = 500;
 
+function replaceSentenceContent(content, className, message) {
+    content.innerHTML = '';
+    const node = document.createElement('div');
+    node.className = className;
+    node.textContent = message;
+    content.appendChild(node);
+}
+
 function createWordPopup(word, x, y, popupWidth, popupHeight) {
     const popup = document.createElement('div');
     popup.className = 'translator-popup';
@@ -306,7 +314,11 @@ export async function handleSelectionTranslation({
     if (!popup || !content) return null;
 
     if (text.trim().length > MAX_TRANSLATION_TEXT_CHARS) {
-        content.textContent = 'Selected text exceeds 500 characters. Please shorten the selection.';
+        replaceSentenceContent(
+            content,
+            'translator-error',
+            'Selected text exceeds 500 characters. Please shorten the selection.'
+        );
         return popup;
     }
 
@@ -316,13 +328,17 @@ export async function handleSelectionTranslation({
     }
 
     if (response && response.success && response.data) {
-        content.innerHTML = '';
-        const result = document.createElement('div');
-        result.className = 'translator-result';
-        result.textContent = response.data.translated || 'No translation results';
-        content.appendChild(result);
+        replaceSentenceContent(
+            content,
+            'translator-result',
+            response.data.translated || 'No translation results'
+        );
     } else {
-        content.textContent = `❌ ${(response && response.error) || 'Translation failed'}`;
+        replaceSentenceContent(
+            content,
+            'translator-error',
+            `❌ ${(response && response.error) || 'Translation failed'}`
+        );
     }
 
     return popup;

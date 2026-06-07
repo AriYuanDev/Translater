@@ -513,6 +513,7 @@
 .translator-sentence-content {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
+  color: #1a1a2e;
   margin: 0;
   border-radius: 14px;
   padding: 16px 20px;
@@ -572,6 +573,7 @@
   .translator-popup-content,
   .translator-sentence-content {
     background: rgba(26, 26, 46, 0.95);
+    color: #fff;
   }
 
   .translator-word {

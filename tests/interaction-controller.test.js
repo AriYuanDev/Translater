@@ -165,6 +165,7 @@ test('handleSelectionTranslation surfaces long text guard errors without generic
     });
 
     assert.match(getShadowText(), /500 characters/);
+    assert.ok(getShadowRoot().querySelector('.translator-sentence-content .translator-error'));
 });
 
 test('handleWordLookupInteraction falls back to translation when dictionary returns no data', async () => {
@@ -307,4 +308,5 @@ test('handleSelectionTranslation shows an error when translation fails', async (
     });
 
     assert.match(getShadowText(), /Translation unavailable/);
+    assert.ok(getShadowRoot().querySelector('.translator-sentence-content .translator-error'));
 });

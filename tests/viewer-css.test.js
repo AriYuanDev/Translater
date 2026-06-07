@@ -43,3 +43,9 @@ test('Google search floating button uses the same dimensions as the translation 
         assert.doesNotMatch(googleButtonRule, /height:\s*24px\s*;/);
     }
 });
+
+test('Sentence popup content owns a readable foreground color', () => {
+    const sentenceContentRule = getRuleBody('.translator-sentence-content', contentCss);
+
+    assert.match(sentenceContentRule, /color:\s*#1a1a2e\s*;/);
+});
