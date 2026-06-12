@@ -510,17 +510,17 @@ function speakTextWithWebSpeech(text, options = {}) {
  * Speaks the given text through extension TTS, with Web Speech as a fallback.
  * @param {string} text - The text to speak.
  * @param {Object} [options={}] - Speech options (lang, rate, pitch).
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} True when extension TTS or Web Speech accepted the utterance.
  */
 export async function speakText(text, options = {}) {
-    if (!text) return;
+    if (!text) return false;
 
     const spokeWithExtensionTts = await speakTextWithExtensionTts(text, options);
     if (spokeWithExtensionTts) {
-        return;
+        return true;
     }
 
-    speakTextWithWebSpeech(text, options);
+    return speakTextWithWebSpeech(text, options);
 }
 
 /**

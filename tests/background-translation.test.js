@@ -56,10 +56,16 @@ function installBackgroundChromeStub({ syncData = {}, localData = {} } = {}) {
                 }
             },
             onInstalled: {
-                addListener() {}
+                handler: null,
+                addListener(handler) {
+                    this.handler = handler;
+                }
             },
             getURL(path) {
                 return `chrome-extension://test/${path}`;
+            },
+            getManifest() {
+                return { version: '1.5.5' };
             }
         },
         storage: {
@@ -97,6 +103,9 @@ function installBackgroundChromeStub({ syncData = {}, localData = {} } = {}) {
         ttsCalls,
         getTtsStopCalls() {
             return ttsStopCalls;
+        },
+        getInstalledHandler() {
+            return chrome.runtime.onInstalled.handler;
         },
         getMessageHandler() {
             return messageHandler;
@@ -228,6 +237,494 @@ test('translation trigger mode defaults to click and can be changed to hover', a
     assert.deepEqual(initial, { success: true, data: { mode: 'click' } });
     assert.deepEqual(saved, { success: true, data: true });
     assert.deepEqual(updated, { success: true, data: { mode: 'hover' } });
+});
+
+test('fetchDictionary reads IPA from Learners alternate pronunciations', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+
+    globalThis.fetch = async () => ({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ([
+            {
+                meta: {
+                    id: 'extreme',
+                    stems: ['extreme', 'extremes']
+                },
+                hwi: {
+                    hw: 'ex*treme',
+                    altprs: {
+                        pr: {
+                            ipa: 'ɪkˈstriːm',
+                            sound: { audio: 'extrem01' }
+                        }
+                    }
+                },
+                fl: 'adjective',
+                shortdef: ['very great in degree']
+            }
+        ])
+    });
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(response.data.word, 'extreme');
+    assert.equal(response.data.phonetic, '/ɪkˈstriːm/');
+    assert.deepEqual(response.data.phonetics, [{
+        text: '/ɪkˈstriːm/',
+        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extrem01.mp3',
+        source: 'headword',
+        sourceWord: 'extreme'
+    }]);
+});
+
+test('fetchDictionary uses pronunciation from another same-headword entry', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+
+    globalThis.fetch = async () => ({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ([
+            {
+                meta: { id: 'extreme:1' },
+                hwi: { hw: 'ex*treme' },
+                fl: 'adjective',
+                shortdef: ['very great in degree']
+            },
+            {
+                meta: { id: 'extreme:2' },
+                hwi: {
+                    hw: 'ex*treme',
+                    prs: [{
+                        ipa: 'ɪkˈstriːm',
+                        sound: { audio: 'extrem01' }
+                    }]
+                },
+                fl: 'noun',
+                shortdef: ['something extreme']
+            }
+        ])
+    });
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extreme'
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(response.data.phonetic, '/ɪkˈstriːm/');
+});
+
+test('fetchDictionary prefers matching inflection pronunciation over headword pronunciation', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+
+    globalThis.fetch = async () => ({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ([
+            {
+                meta: {
+                    id: 'extreme',
+                    stems: ['extreme', 'extremes']
+                },
+                hwi: {
+                    hw: 'ex*treme',
+                    prs: [{
+                        ipa: 'ɪkˈstriːm',
+                        sound: { audio: 'extrem01' }
+                    }]
+                },
+                ins: [{
+                    if: 'extremes',
+                    prs: [{
+                        ipa: 'ɪkˈstriːmz',
+                        sound: { audio: 'extremes01' }
+                    }]
+                }],
+                fl: 'noun',
+                shortdef: ['an extreme amount or degree']
+            }
+        ])
+    });
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(response.data.phonetic, '/ɪkˈstriːmz/');
+    assert.deepEqual(response.data.phonetics[0], {
+        text: '/ɪkˈstriːmz/',
+        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extremes01.mp3',
+        source: 'inflection',
+        sourceWord: 'extremes'
+    });
+});
+
+test('fetchDictionary prefers matching inflection pronunciation from later same-headword entries', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+
+    globalThis.fetch = async () => ({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ([
+            {
+                meta: {
+                    id: 'extreme:1',
+                    stems: ['extreme', 'extremes']
+                },
+                hwi: {
+                    hw: 'ex*treme',
+                    prs: [{
+                        ipa: 'ɪkˈstriːm',
+                        sound: { audio: 'extrem01' }
+                    }]
+                },
+                fl: 'adjective',
+                shortdef: ['very great in degree']
+            },
+            {
+                meta: {
+                    id: 'extreme:2',
+                    stems: ['extreme', 'extremes']
+                },
+                hwi: { hw: 'ex*treme' },
+                ins: [{
+                    if: 'extremes',
+                    prs: [{
+                        ipa: 'ɪkˈstriːmz',
+                        sound: { audio: 'extremes01' }
+                    }]
+                }],
+                fl: 'noun',
+                shortdef: ['an extreme amount or degree']
+            }
+        ])
+    });
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(response.data.phonetic, '/ɪkˈstriːmz/');
+    assert.deepEqual(response.data.phonetics[0], {
+        text: '/ɪkˈstriːmz/',
+        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extremes01.mp3',
+        source: 'inflection',
+        sourceWord: 'extremes'
+    });
+});
+
+test('fetchDictionary refreshes old cached dictionary entries before returning phonetics', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' },
+        localData: {
+            dictionaryCache: [
+                [
+                    'extremes',
+                    {
+                        timestamp: Date.now(),
+                        data: {
+                            word: 'extreme',
+                            searchedWord: 'extremes',
+                            phonetic: '',
+                            phonetics: [],
+                            meanings: [{
+                                partOfSpeech: 'adjective',
+                                definitions: [{ definition: 'very great in degree' }]
+                            }]
+                        }
+                    }
+                ]
+            ]
+        }
+    });
+    let fetchCalls = 0;
+
+    globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ([
+                {
+                    meta: {
+                        id: 'extreme',
+                        stems: ['extreme', 'extremes']
+                    },
+                    hwi: {
+                        hw: 'ex*treme',
+                        altprs: {
+                            pr: {
+                                ipa: 'ɪkˈstriːm',
+                                sound: { audio: 'extrem01' }
+                            }
+                        }
+                    },
+                    fl: 'adjective',
+                    shortdef: ['very great in degree']
+                }
+            ])
+        };
+    };
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(fetchCalls, 1);
+    assert.equal(response.data.phonetic, '/ɪkˈstriːm/');
+});
+
+test('dictionary cache is cleared when the extension updates', async () => {
+    const { chrome, getInstalledHandler } = installBackgroundChromeStub({
+        localData: {
+            dictionaryCache: [
+                [
+                    'extremes',
+                    {
+                        schemaVersion: 7,
+                        timestamp: Date.now(),
+                        data: { word: 'extreme', phonetic: '', phonetics: [] }
+                    }
+                ]
+            ]
+        }
+    });
+
+    await loadBackground();
+    getInstalledHandler()({ reason: 'update' });
+
+    assert.equal(chrome.storage.local.data.dictionaryCache, undefined);
+});
+
+test('fetchDictionary refreshes schema v2 stem cache entries without phonetics', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' },
+        localData: {
+            dictionaryCache: [
+                [
+                    'extremes',
+                    {
+                        schemaVersion: 2,
+                        timestamp: Date.now(),
+                        data: {
+                            word: 'extreme',
+                            searchedWord: 'extremes',
+                            phonetic: '',
+                            phonetics: [],
+                            meanings: [{
+                                partOfSpeech: 'noun',
+                                definitions: [{ definition: 'either one of two opposite conditions' }]
+                            }]
+                        }
+                    }
+                ]
+            ]
+        }
+    });
+    const lookedUpWords = [];
+
+    globalThis.fetch = async resource => {
+        const lookedUpWord = decodeURIComponent(new URL(resource).pathname.split('/').pop());
+        lookedUpWords.push(lookedUpWord);
+
+        if (lookedUpWord === 'extremes') {
+            return {
+                ok: true,
+                headers: { get: () => 'application/json' },
+                json: async () => ([{
+                    meta: { id: 'extreme', stems: ['extreme', 'extremes'] },
+                    hwi: { hw: 'ex*treme' },
+                    fl: 'noun',
+                    shortdef: ['either one of two opposite conditions']
+                }])
+            };
+        }
+
+        return {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ([{
+                meta: { id: 'extreme' },
+                hwi: {
+                    hw: 'ex*treme',
+                    prs: [{
+                        ipa: 'ɪkˈstriːm',
+                        sound: { audio: 'extrem01' }
+                    }]
+                },
+                fl: 'adjective',
+                shortdef: ['very great in degree']
+            }])
+        };
+    };
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.deepEqual(lookedUpWords, ['extremes', 'extreme']);
+    assert.equal(response.data.phonetic, '/ɪkˈstriːm/');
+});
+
+test('fetchDictionary follows a resolved headword when a stem response has no phonetics', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+    const lookedUpWords = [];
+
+    globalThis.fetch = async resource => {
+        const lookedUpWord = decodeURIComponent(new URL(resource).pathname.split('/').pop());
+        lookedUpWords.push(lookedUpWord);
+
+        if (lookedUpWord === 'extremes') {
+            return {
+                ok: true,
+                headers: { get: () => 'application/json' },
+                json: async () => ([
+                    {
+                        meta: {
+                            id: 'extreme',
+                            stems: ['extreme', 'extremes']
+                        },
+                        hwi: { hw: 'ex*treme' },
+                        fl: 'adjective',
+                        shortdef: ['very great in degree']
+                    }
+                ])
+            };
+        }
+
+        return {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ([
+                {
+                    meta: { id: 'extreme' },
+                    hwi: {
+                        hw: 'ex*treme',
+                        prs: [{
+                            ipa: 'ɪkˈstriːm',
+                            sound: { audio: 'extrem01' }
+                        }]
+                    },
+                    fl: 'adjective',
+                    shortdef: ['very great in degree']
+                }
+            ])
+        };
+    };
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'extremes'
+    });
+
+    assert.equal(response.success, true);
+    assert.deepEqual(lookedUpWords, ['extremes', 'extreme']);
+    assert.equal(response.data.word, 'extreme');
+    assert.equal(response.data.searchedWord, 'extremes');
+    assert.equal(response.data.phonetic, '/ɪkˈstriːm/');
+});
+
+test('fetchDictionary falls back to likely base words when an exact derived entry has no phonetics', async () => {
+    const { getMessageHandler } = installBackgroundChromeStub({
+        syncData: { mwApiKey: 'mw-key' }
+    });
+    const lookedUpWords = [];
+
+    globalThis.fetch = async resource => {
+        const lookedUpWord = decodeURIComponent(new URL(resource).pathname.split('/').pop());
+        lookedUpWords.push(lookedUpWord);
+
+        if (lookedUpWord === 'prolonged') {
+            return {
+                ok: true,
+                headers: { get: () => 'application/json' },
+                json: async () => ([
+                    {
+                        meta: {
+                            id: 'prolonged',
+                            stems: ['prolonged']
+                        },
+                        hwi: { hw: 'pro*longed' },
+                        fl: 'adjective',
+                        shortdef: ['lasting longer than usual or expected']
+                    }
+                ])
+            };
+        }
+
+        return {
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => ([
+                {
+                    meta: {
+                        id: 'prolong',
+                        stems: ['prolong', 'prolonged', 'prolonging', 'prolongs']
+                    },
+                    hwi: {
+                        hw: 'pro*long',
+                        prs: [{
+                            ipa: 'prəˈlɔːŋ',
+                            sound: { audio: 'prolon01' }
+                        }]
+                    },
+                    ins: [{
+                        if: 'pro*longed'
+                    }],
+                    fl: 'verb',
+                    shortdef: ['to lengthen in time']
+                }
+            ])
+        };
+    };
+
+    await loadBackground();
+    const response = await sendBackgroundMessage(getMessageHandler(), {
+        action: 'fetchDictionary',
+        word: 'prolonged'
+    });
+
+    assert.equal(response.success, true);
+    assert.deepEqual(lookedUpWords, ['prolonged', 'prolong']);
+    assert.equal(response.data.word, 'prolonged');
+    assert.equal(response.data.phonetic, '/prəˈlɔːŋd/');
+    assert.deepEqual(response.data.phonetics[0], {
+        text: '/prəˈlɔːŋd/',
+        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/p/prolon01.mp3',
+        source: 'derived-inflection',
+        sourceWord: 'prolonged',
+        audioSourceWord: 'prolong'
+    });
 });
 
 test('speakText action uses Chrome TTS from the background context', async () => {

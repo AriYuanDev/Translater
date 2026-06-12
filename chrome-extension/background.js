@@ -13,12 +13,21 @@ import {
 const dictionaryCache = new Map();
 const CACHE_MAX_SIZE = 100;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const DICTIONARY_CACHE_SCHEMA_VERSION = 7;
+
+function isFreshDictionaryCacheEntry(entry) {
+  return Boolean(
+    entry &&
+    entry.schemaVersion === DICTIONARY_CACHE_SCHEMA_VERSION &&
+    Date.now() - entry.timestamp < CACHE_TTL
+  );
+}
 
 // Preload cache from storage
 chrome.storage.local.get(['dictionaryCache'], (result) => {
   if (result.dictionaryCache) {
     result.dictionaryCache.forEach(([word, entry]) => {
-      if (Date.now() - entry.timestamp < CACHE_TTL) {
+      if (isFreshDictionaryCacheEntry(entry)) {
         dictionaryCache.set(word, entry);
       }
     });
@@ -33,7 +42,7 @@ chrome.storage.local.get(['dictionaryCache'], (result) => {
  */
 function getCachedDictionary(word) {
   const cached = dictionaryCache.get(word);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (isFreshDictionaryCacheEntry(cached)) {
     // Move to end for LRU implementation
     dictionaryCache.delete(word);
     dictionaryCache.set(word, cached);
@@ -56,7 +65,11 @@ function setCachedDictionary(word, data) {
     const firstKey = dictionaryCache.keys().next().value;
     dictionaryCache.delete(firstKey);
   }
-  dictionaryCache.set(word, { data, timestamp: Date.now() });
+  dictionaryCache.set(word, {
+    data,
+    timestamp: Date.now(),
+    schemaVersion: DICTIONARY_CACHE_SCHEMA_VERSION
+  });
   saveDictionaryCache();
 }
 
@@ -71,7 +84,9 @@ function saveDictionaryCache() {
 
   setTimeout(() => {
     savePending = false;
-    chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
+    if (globalThis.chrome?.storage?.local?.set) {
+      globalThis.chrome.storage.local.set({ dictionaryCache: Array.from(dictionaryCache.entries()) });
+    }
   }, 1000);
 }
 // Tracking active requests (prevent concurrent duplicate requests)
@@ -521,6 +536,348 @@ function parseMWDefinitionText(text) {
     .trim();
 }
 
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getMWEntryId(entry, fallback = '') {
+  return String(entry?.meta?.id || fallback).replace(/:\d+$/, '');
+}
+
+function normalizeMWWord(value) {
+  return String(value || '').replace(/\*/g, '').toLowerCase();
+}
+
+function getMWHeadword(entry, fallback = '') {
+  return normalizeMWWord(entry?.hwi?.hw || getMWEntryId(entry, fallback));
+}
+
+function addUniqueWordCandidate(candidates, candidate, sourceWord) {
+  const normalizedCandidate = normalizeMWWord(candidate);
+  if (!normalizedCandidate || normalizedCandidate === sourceWord) return;
+  if (!candidates.includes(normalizedCandidate)) {
+    candidates.push(normalizedCandidate);
+  }
+}
+
+function addUndoubledCandidate(candidates, stem, sourceWord) {
+  if (stem.length < 2) return;
+
+  const last = stem.at(-1);
+  const previous = stem.at(-2);
+  if (last && last === previous && /[bcdfghjklmnpqrstvwxyz]/.test(last)) {
+    addUniqueWordCandidate(candidates, stem.slice(0, -1), sourceWord);
+  }
+}
+
+function getLikelyBaseWordCandidates(word) {
+  const sourceWord = normalizeMWWord(word);
+  const candidates = [];
+
+  if (sourceWord.endsWith('ied') && sourceWord.length > 3) {
+    addUniqueWordCandidate(candidates, `${sourceWord.slice(0, -3)}y`, sourceWord);
+  }
+
+  if (sourceWord.endsWith('ies') && sourceWord.length > 3) {
+    addUniqueWordCandidate(candidates, `${sourceWord.slice(0, -3)}y`, sourceWord);
+  }
+
+  if (sourceWord.endsWith('ing') && sourceWord.length > 4) {
+    const stem = sourceWord.slice(0, -3);
+    addUniqueWordCandidate(candidates, stem, sourceWord);
+    addUndoubledCandidate(candidates, stem, sourceWord);
+    addUniqueWordCandidate(candidates, `${stem}e`, sourceWord);
+  }
+
+  if (!sourceWord.endsWith('ied') && sourceWord.endsWith('ed') && sourceWord.length > 3) {
+    const stem = sourceWord.slice(0, -2);
+    addUniqueWordCandidate(candidates, stem, sourceWord);
+    addUndoubledCandidate(candidates, stem, sourceWord);
+    addUniqueWordCandidate(candidates, sourceWord.slice(0, -1), sourceWord);
+  }
+
+  if (!sourceWord.endsWith('ies') && sourceWord.endsWith('es') && sourceWord.length > 3) {
+    addUniqueWordCandidate(candidates, sourceWord.slice(0, -2), sourceWord);
+    addUniqueWordCandidate(candidates, sourceWord.slice(0, -1), sourceWord);
+  } else if (sourceWord.endsWith('s') && sourceWord.length > 2) {
+    addUniqueWordCandidate(candidates, sourceWord.slice(0, -1), sourceWord);
+  }
+
+  return candidates.slice(0, 4);
+}
+
+function formatMWPronunciationText(pronunciation) {
+  const text = pronunciation?.ipa || pronunciation?.mw || '';
+  return text ? `/${text}/` : '';
+}
+
+function getPhoneticBody(text) {
+  return String(text || '').trim().replace(/^\/+|\/+$/g, '');
+}
+
+function getLastIpaToken(phoneticBody) {
+  const body = getPhoneticBody(phoneticBody)
+    .replace(/[ˈˌ.()\-\s]/g, '')
+    .replace(/ː/g, '');
+
+  for (const token of ['tʃ', 'dʒ', 'θ', 'ð', 'ʃ', 'ʒ', 'ŋ']) {
+    if (body.endsWith(token)) return token;
+  }
+
+  return body.at(-1) || '';
+}
+
+function getRegularEdIpaSuffix(basePhoneticText) {
+  const lastToken = getLastIpaToken(basePhoneticText);
+  if (!lastToken) return '';
+  if (['t', 'd'].includes(lastToken)) return 'ɪd';
+  if (['p', 'k', 'f', 'θ', 's', 'ʃ', 'tʃ'].includes(lastToken)) return 't';
+  return 'd';
+}
+
+function getRegularSIpaSuffix(basePhoneticText) {
+  const lastToken = getLastIpaToken(basePhoneticText);
+  if (!lastToken) return '';
+  if (['s', 'z', 'ʃ', 'ʒ', 'tʃ', 'dʒ'].includes(lastToken)) return 'ɪz';
+  if (['p', 't', 'k', 'f', 'θ'].includes(lastToken)) return 's';
+  return 'z';
+}
+
+function getInflectedPhoneticText(basePhoneticText, selectedWord, sourceWord) {
+  const body = getPhoneticBody(basePhoneticText);
+  const selected = normalizeMWWord(selectedWord);
+  const source = normalizeMWWord(sourceWord);
+  if (!body || !selected || !source || selected === source) return '';
+
+  if (selected.endsWith('ed') && getLikelyBaseWordCandidates(selected).includes(source)) {
+    const suffix = getRegularEdIpaSuffix(body);
+    return suffix ? `/${body}${suffix}/` : '';
+  }
+
+  if ((selected.endsWith('s') || selected.endsWith('es')) &&
+    getLikelyBaseWordCandidates(selected).includes(source)) {
+    const suffix = getRegularSIpaSuffix(body);
+    return suffix ? `/${body}${suffix}/` : '';
+  }
+
+  return '';
+}
+
+function deriveRegularInflectionPronunciation(pronunciation, selectedWord) {
+  if (!pronunciation?.text) return pronunciation;
+
+  const selected = normalizeMWWord(selectedWord);
+  const sourceWord = normalizeMWWord(pronunciation.sourceWord);
+  const inflectedText = getInflectedPhoneticText(pronunciation.text, selected, sourceWord);
+  if (!inflectedText) return pronunciation;
+
+  return {
+    ...pronunciation,
+    text: inflectedText,
+    source: 'derived-inflection',
+    sourceWord: selected,
+    audioSourceWord: pronunciation.audioSourceWord || sourceWord
+  };
+}
+
+function normalizeMWPronunciation(pronunciation, sourceWord = '', source = 'headword') {
+  if (!pronunciation || typeof pronunciation !== 'object') return null;
+
+  const text = formatMWPronunciationText(pronunciation);
+  const audio = pronunciation.sound?.audio ? buildMWAudioUrl(pronunciation.sound.audio) : '';
+
+  if (!text && !audio) return null;
+  return {
+    text,
+    audio,
+    source,
+    sourceWord: normalizeMWWord(sourceWord)
+  };
+}
+
+function collectMWPronunciations(container, sourceWord = '', source = 'headword') {
+  if (!container || typeof container !== 'object') return [];
+
+  const pronunciations = [];
+  pronunciations.push(...asArray(container.prs));
+
+  for (const altPronunciations of asArray(container.altprs)) {
+    pronunciations.push(...asArray(altPronunciations?.pr));
+    pronunciations.push(...asArray(altPronunciations?.prs));
+  }
+
+  return pronunciations
+    .map(pronunciation => normalizeMWPronunciation(pronunciation, sourceWord, source))
+    .filter(Boolean);
+}
+
+function findFirstMWPronunciation(containers, sourceWord, source) {
+  for (const container of containers) {
+    const pronunciation = collectMWPronunciations(container, sourceWord, source)[0];
+    if (pronunciation) return pronunciation;
+  }
+  return null;
+}
+
+function uniqueMWEntries(entries, primaryEntry) {
+  const seen = new Set();
+  return [primaryEntry, ...entries]
+    .filter(entry => entry && typeof entry !== 'string')
+    .filter(entry => {
+      if (seen.has(entry)) return false;
+      seen.add(entry);
+      return true;
+    });
+}
+
+function getRelevantMWEntries(entries, primaryEntry, resolvedWord) {
+  const resolved = normalizeMWWord(resolvedWord || getMWEntryId(primaryEntry));
+  return uniqueMWEntries(entries, primaryEntry)
+    .filter(entry => {
+      if (entry === primaryEntry) return true;
+      return getMWEntryId(entry).toLowerCase() === resolved ||
+        getMWHeadword(entry) === resolved ||
+        asArray(entry?.meta?.stems).some(stem => normalizeMWWord(stem) === resolved);
+    });
+}
+
+function findFirstMWPronunciationFromSources(sources) {
+  for (const source of sources) {
+    const pronunciation = collectMWPronunciations(
+      source.container,
+      source.sourceWord,
+      source.source
+    )[0];
+    if (pronunciation) return pronunciation;
+  }
+  return null;
+}
+
+function getExactHeadwordSources(entries, searchedWord) {
+  const searched = normalizeMWWord(searchedWord);
+  return entries
+    .filter(entry => (
+      getMWEntryId(entry).toLowerCase() === searched ||
+      getMWHeadword(entry) === searched
+    ))
+    .map(entry => ({
+      container: entry.hwi,
+      source: 'headword',
+      sourceWord: searched
+    }));
+}
+
+function getMatchingInflectionSources(entries, searchedWord) {
+  const searched = normalizeMWWord(searchedWord);
+  return entries.flatMap(entry => (
+    asArray(entry?.ins)
+      .filter(inflection => normalizeMWWord(inflection?.if) === searched)
+      .map(inflection => ({
+        container: inflection,
+        source: 'inflection',
+        sourceWord: searched
+      }))
+  ));
+}
+
+function getMatchingAlternateHeadwordSources(entries, searchedWord) {
+  const searched = normalizeMWWord(searchedWord);
+  return entries.flatMap(entry => (
+    asArray(entry?.ahws)
+      .filter(alternateHeadword => normalizeMWWord(alternateHeadword?.hw) === searched)
+      .map(alternateHeadword => ({
+        container: alternateHeadword,
+        source: 'alternate-headword',
+        sourceWord: searched
+      }))
+  ));
+}
+
+function getMatchingVariantSources(entries, searchedWord) {
+  const searched = normalizeMWWord(searchedWord);
+  return entries.flatMap(entry => (
+    asArray(entry?.vrs)
+      .filter(variant => normalizeMWWord(variant?.va) === searched)
+      .map(variant => ({
+        container: variant,
+        source: 'variant',
+        sourceWord: searched
+      }))
+  ));
+}
+
+function getResolvedHeadwordSources(entries, resolvedWord) {
+  const resolved = normalizeMWWord(resolvedWord);
+  return entries
+    .filter(entry => (
+      getMWEntryId(entry).toLowerCase() === resolved ||
+      getMWHeadword(entry) === resolved
+    ))
+    .map(entry => ({
+      container: entry.hwi,
+      source: 'headword',
+      sourceWord: resolved
+    }));
+}
+
+function getAnyRelevantPronunciationSources(entries, resolvedWord) {
+  const resolved = normalizeMWWord(resolvedWord);
+  return entries.flatMap(entry => ([
+    {
+      container: entry.hwi,
+      source: 'headword',
+      sourceWord: getMWHeadword(entry, resolved)
+    },
+    ...asArray(entry?.ahws).map(alternateHeadword => ({
+      container: alternateHeadword,
+      source: 'alternate-headword',
+      sourceWord: normalizeMWWord(alternateHeadword?.hw)
+    })),
+    ...asArray(entry?.vrs).map(variant => ({
+      container: variant,
+      source: 'variant',
+      sourceWord: normalizeMWWord(variant?.va)
+    })),
+    ...asArray(entry?.ins).map(inflection => ({
+      container: inflection,
+      source: 'inflection',
+      sourceWord: normalizeMWWord(inflection?.if)
+    }))
+  ]));
+}
+
+function findBestMWPronunciation(entries, primaryEntry, searchedWord, resolvedWord) {
+  const searched = normalizeMWWord(searchedWord);
+  const resolved = normalizeMWWord(resolvedWord || getMWEntryId(primaryEntry, searchedWord));
+  const relevantEntries = getRelevantMWEntries(entries, primaryEntry, resolved);
+
+  const exactHeadwordSources = getExactHeadwordSources(relevantEntries, searched);
+  const selectedFormSources = [
+    ...getMatchingInflectionSources(relevantEntries, searched),
+    ...getMatchingAlternateHeadwordSources(relevantEntries, searched),
+    ...getMatchingVariantSources(relevantEntries, searched)
+  ];
+  const resolvedHeadwordSources = getResolvedHeadwordSources(relevantEntries, resolved);
+  const broadFallbackSources = getAnyRelevantPronunciationSources(relevantEntries, resolved);
+
+  const prioritySources = searched === resolved
+    ? [
+      ...exactHeadwordSources,
+      ...selectedFormSources,
+      ...resolvedHeadwordSources,
+      ...broadFallbackSources
+    ]
+    : [
+      ...selectedFormSources,
+      ...exactHeadwordSources,
+      ...resolvedHeadwordSources,
+      ...broadFallbackSources
+    ];
+
+  return findFirstMWPronunciationFromSources(prioritySources);
+}
+
 // Parse Merriam-Webster Learners Dictionary API response
 /**
  * Parses the raw API response from Merriam-Webster.
@@ -544,21 +901,9 @@ function parseMWLearnersResponse(data, word) {
   // Extract original headword - remove digits after ID (e.g., support:1 -> support)
   const apiWord = entry.meta?.id?.replace(/:\d+$/, '') || word;
 
-  // Extract phonetic and audio
-  let phonetic = '';
-  let audioUrl = '';
-
-  if (entry.hwi && entry.hwi.prs && entry.hwi.prs.length > 0) {
-    const pron = entry.hwi.prs[0];
-    // Learners Dictionary uses ipa field
-    if (pron.ipa) {
-      phonetic = `/${pron.ipa}/`;
-    }
-    // Audio file
-    if (pron.sound && pron.sound.audio) {
-      audioUrl = buildMWAudioUrl(pron.sound.audio);
-    }
-  }
+  const pronunciation = findBestMWPronunciation(data, entry, word, apiWord);
+  const phonetic = pronunciation?.text || '';
+  const audioUrl = pronunciation?.audio || '';
 
   // Extract part of speech
   const partOfSpeech = entry.fl || 'word';
@@ -635,9 +980,106 @@ function parseMWLearnersResponse(data, word) {
     word: apiWord || word,
     searchedWord: word,
     phonetic: phonetic || '',
-    phonetics: (phonetic || audioUrl) ? [{ text: phonetic, audio: audioUrl }] : [],
+    phonetics: pronunciation ? [pronunciation] : [],
     meanings: meanings || []
   };
+}
+
+function hasDictionaryPronunciation(result) {
+  return Boolean(
+    result?.phonetic ||
+    result?.phonetics?.some(phonetic => phonetic?.text || phonetic?.audio)
+  );
+}
+
+function mergeDictionaryPronunciation(target, source) {
+  if (!target || !source) return target;
+
+  if (!target.phonetic && source.phonetic) {
+    target.phonetic = source.phonetic;
+  }
+
+  if ((!target.phonetics || target.phonetics.length === 0) && Array.isArray(source.phonetics)) {
+    target.phonetics = source.phonetics;
+  }
+
+  return target;
+}
+
+async function fillResolvedHeadwordPronunciation(result, normalizedWord) {
+  if (hasDictionaryPronunciation(result)) return result;
+
+  const resolvedWord = String(result?.word || '').trim().toLowerCase();
+  if (!resolvedWord || resolvedWord === normalizedWord) return result;
+
+  try {
+    const resolvedResult = await fetchDictionary(resolvedWord);
+    if (hasDictionaryPronunciation(resolvedResult)) {
+      mergeDictionaryPronunciation(result, resolvedResult);
+    }
+  } catch (error) {
+    console.warn(`[MW API] Could not load pronunciation for resolved headword "${resolvedWord}":`, error);
+  }
+
+  return result;
+}
+
+async function fetchMWLearnersData(normalizedWord) {
+  const apiKey = await getMWApiKey();
+  if (!apiKey) {
+    throw new Error('Please configure Merriam-Webster API Key');
+  }
+
+  const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
+
+  console.log(`[MW API] Query: ${normalizedWord}`);
+
+  const response = await fetchWithTimeout(url);
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('API Key invalid or expired');
+    }
+    throw new Error('Dictionary service temporarily unavailable');
+  }
+
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    const text = await response.text();
+    console.error(`[MW API] Returned non-JSON data: ${text}`);
+    throw new Error('Dictionary service returned invalid format');
+  }
+
+  return response.json();
+}
+
+async function fetchPronunciationFromLookupWord(lookupWord, pronunciationWord) {
+  const data = await fetchMWLearnersData(lookupWord);
+  const result = parseMWLearnersResponse(data, pronunciationWord);
+  if (hasDictionaryPronunciation(result)) {
+    result.phonetics = result.phonetics
+      .map(pronunciation => deriveRegularInflectionPronunciation(pronunciation, pronunciationWord));
+    result.phonetic = result.phonetics.find(pronunciation => pronunciation?.text)?.text || result.phonetic;
+  }
+  return hasDictionaryPronunciation(result) ? result : null;
+}
+
+async function fillLikelyBaseWordPronunciation(result, normalizedWord) {
+  if (hasDictionaryPronunciation(result)) return result;
+
+  for (const candidate of getLikelyBaseWordCandidates(normalizedWord)) {
+    try {
+      const candidateResult = await fetchPronunciationFromLookupWord(candidate, normalizedWord);
+      if (hasDictionaryPronunciation(candidateResult)) {
+        mergeDictionaryPronunciation(result, candidateResult);
+        return result;
+      }
+    } catch (error) {
+      console.warn(`[MW API] Could not load pronunciation candidate "${candidate}" for "${normalizedWord}":`, error);
+    }
+  }
+
+  return result;
 }
 
 // Fetch dictionary data - Using Merriam-Webster Learners API (with cache and concurrency protection)
@@ -663,34 +1105,7 @@ async function fetchDictionary(word) {
   // Create and track new request
   const requestPromise = (async () => {
     try {
-      // Get API Key
-      const apiKey = await getMWApiKey();
-      if (!apiKey) {
-        throw new Error('Please configure Merriam-Webster API Key');
-      }
-
-      // Call Merriam-Webster Learners Dictionary API
-      const url = `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(normalizedWord)}?key=${apiKey}`;
-
-      console.log(`[MW API] Query: ${normalizedWord}`);
-
-      const response = await fetchWithTimeout(url);
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error('API Key invalid or expired');
-        }
-        throw new Error('Dictionary service temporarily unavailable');
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error(`[MW API] Returned non-JSON data: ${text}`);
-        throw new Error('Dictionary service returned invalid format');
-      }
-
-      const data = await response.json();
+      const data = await fetchMWLearnersData(normalizedWord);
 
       // Parse API response
       const result = parseMWLearnersResponse(data, word);
@@ -699,6 +1114,9 @@ async function fetchDictionary(word) {
         console.log(`[Background] ${normalizedWord} no definition found, falling back to translation`);
         return null; // Return null instead of error to trigger fallback translation logic in content script
       }
+
+      await fillResolvedHeadwordPronunciation(result, normalizedWord);
+      await fillLikelyBaseWordPronunciation(result, normalizedWord);
 
       // Put in cache
       setCachedDictionary(normalizedWord, result);
@@ -956,6 +1374,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     console.log('Translater extension installed');
   } else if (details.reason === 'update') {
+    dictionaryCache.clear();
+    chrome.storage.local.remove(['dictionaryCache']);
     console.log('Translater extension updated to version', chrome.runtime.getManifest().version);
   }
 });

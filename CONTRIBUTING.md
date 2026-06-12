@@ -8,12 +8,17 @@
 4. Enable **Developer mode**.
 5. Click **Load unpacked** and select `chrome-extension/`.
 6. Open the extension options page and configure local API keys.
+7. For Android work, open `android-app/` in Android Studio or use the checked-in Gradle Wrapper.
+8. Copy `android-app/local.properties.example` to `android-app/local.properties` if Gradle needs an SDK path.
 
 ## Validation Expectations
 
 - Run `npm test` for every code change.
+- Run `npm run smoke:playwright` when Chrome interaction, viewer, or extension-loading behavior changes.
+- Run `cd android-app && ./gradlew test` when Android source changes.
+- Run `cd android-app && ./gradlew assembleDebug` when Android packaging, native libraries, assets, manifest, or Gradle configuration changes.
 - Use `TEST_TRANSLATION.md` for manual smoke testing when a change affects UI, interaction flow, permissions, storage, PDF handling, or Markdown rendering.
-- If your change affects visible behavior, verify the impacted surface directly in Chrome.
+- If your change affects visible behavior, verify the impacted Chrome or Android surface directly.
 
 ## Pull Request Expectations
 

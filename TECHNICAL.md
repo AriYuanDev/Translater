@@ -48,6 +48,32 @@ The Chrome extension is built around these runtime surfaces:
 
 Dictionary popups now use popup identity checks so older async responses cannot overwrite a newer popup.
 
+## Chrome Pronunciation Priority
+
+Chrome word lookup uses Merriam-Webster's Learners API first because that reference supports IPA, audio pronunciations, and stem queries for inflections and variants.
+
+Pronunciation extraction follows this order:
+
+1. Query the selected word exactly through the Learners API. Merriam-Webster stems allow a selected inflection or variant to resolve to the correct entry.
+2. If the selected word is a resolved form, prefer pronunciation objects attached to that selected form: matching `ins[].if`, matching `ahws[].hw`, then matching `vrs[].va`.
+3. If no selected-form pronunciation exists, use the resolved headword pronunciation from `hwi.prs` or `hwi.altprs`.
+4. If the first entry has no pronunciation, scan later entries for the same resolved headword before falling back.
+5. If the stem response resolves to a headword but has no pronunciation at all, make one follow-up lookup for the resolved headword and merge its pronunciation.
+6. If an exact derived entry has definitions but no pronunciation, try a small set of likely base-word lookups for regular endings such as `-ed`, `-ing`, `-s`, and `-es`. Parse those base entries against the original selected word, so selected-form `ins[].prs` still wins when present.
+7. Keep the selected entry's word and definitions when pronunciation is borrowed from a base lookup.
+8. Persist dictionary results only under the current dictionary cache schema so stale parsed responses do not hide new pronunciation parsing behavior.
+
+Popup audio follows this order:
+
+1. If the dictionary MP3 belongs to the selected word, play that MP3.
+2. If the selected word is an inflection or variant and only headword audio exists, read the selected word through Chrome TTS / Web Speech first.
+3. If selected-word TTS is unavailable, play the headword MP3 as the final dictionary-backed fallback.
+
+Reference points:
+
+- Learners API: `https://dictionaryapi.com/products/api-learners-dictionary`
+- JSON field documentation: `https://dictionaryapi.com/products/json`
+
 ## PDF Viewer
 
 `pdfviewer.js` uses PDF.js with lazy rendering:

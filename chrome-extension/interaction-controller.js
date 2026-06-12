@@ -1,5 +1,4 @@
 import {
-    createSpeakerSVG,
     calculatePopupPosition,
     sendMessageSafe,
     speakText,
@@ -133,29 +132,18 @@ function updateWordPopupWithData(popup, data, word) {
     const info = document.createElement('div');
     info.className = 'translator-word-info';
 
-    const resolvedWord = data.word || word;
+    const selectedWord = word || data.word;
+    const resolvedWord = data.word || selectedWord;
     const wordSpan = document.createElement('span');
     wordSpan.className = 'translator-word';
-    wordSpan.textContent = resolvedWord;
+    wordSpan.textContent = selectedWord;
     info.appendChild(wordSpan);
 
-    if (data.word && word && data.word.toLowerCase() !== word.toLowerCase()) {
-        const sourceSpan = document.createElement('span');
-        sourceSpan.className = 'translator-source-word';
-        sourceSpan.textContent = `(from ${word}) `;
-
-        const miniSpeakButton = document.createElement('span');
-        miniSpeakButton.className = 'translator-mini-speak';
-        miniSpeakButton.innerHTML = createSpeakerSVG();
-        miniSpeakButton.onclick = event => {
-            event.stopPropagation();
-            void speakText(word).catch(error => {
-                console.warn('[Translater] Speak failed:', error);
-            });
-        };
-
-        sourceSpan.appendChild(miniSpeakButton);
-        info.appendChild(sourceSpan);
+    if (resolvedWord && selectedWord && normalizeLookupWord(resolvedWord) !== normalizeLookupWord(selectedWord)) {
+        const entrySpan = document.createElement('span');
+        entrySpan.className = 'translator-entry-word';
+        entrySpan.textContent = `Dictionary entry: ${resolvedWord}`;
+        info.appendChild(entrySpan);
     }
 
     if (data.phonetic) {
@@ -165,10 +153,17 @@ function updateWordPopupWithData(popup, data, word) {
         info.appendChild(phonetic);
     }
 
+    const bestAudioUrl = findBestAudioUrl(data.phonetics);
+    const ownership = createPronunciationOwnership(data, word, bestAudioUrl);
+    if (ownership) {
+        info.appendChild(ownership);
+    }
+
     header.appendChild(info);
 
-    const bestAudioUrl = findBestAudioUrl(data.phonetics);
-    header.appendChild(createSpeakButton(() => playLookupAudio(data, word, bestAudioUrl)));
+    const speakButton = createSpeakButton(() => playLookupAudio(data, word, bestAudioUrl));
+    speakButton.title = getLookupAudioTitle(data, word, bestAudioUrl);
+    header.appendChild(speakButton);
 
     const meanings = document.createElement('div');
     meanings.className = 'translator-meanings';
@@ -220,27 +215,137 @@ function getAudioCtor() {
     return null;
 }
 
-async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?.phonetics)) {
-    const isMorphed = data?.word && word && data.word.toLowerCase() !== word.toLowerCase();
+function normalizeLookupWord(value) {
+    return String(value || '').trim().toLowerCase();
+}
 
-    if (isMorphed) {
-        await speakText(word);
-        return;
+function findPhoneticByText(phonetics, phoneticText) {
+    if (!Array.isArray(phonetics)) return null;
+    return phonetics.find(phonetic => phonetic?.text && phonetic.text === phoneticText) || null;
+}
+
+function findPhoneticByAudio(phonetics, audioUrl) {
+    if (!audioUrl || !Array.isArray(phonetics)) return null;
+    return phonetics.find(phonetic => phonetic?.audio === audioUrl) || null;
+}
+
+function getPronunciationSourceWord(phonetic, fallbackWord) {
+    return normalizeLookupWord(phonetic?.sourceWord || fallbackWord);
+}
+
+function getAudioOwnerWord(data, word, audioUrl) {
+    if (!audioUrl) return '';
+    const audioPhonetic = findPhoneticByAudio(data?.phonetics, audioUrl);
+    return normalizeLookupWord(audioPhonetic?.audioSourceWord || audioPhonetic?.sourceWord || word);
+}
+
+function appendOwnershipPill(container, label, value, detail = '') {
+    const pill = document.createElement('span');
+    pill.className = 'translator-pronunciation-pill';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'translator-pronunciation-label';
+    labelSpan.textContent = `${label}:`;
+    pill.appendChild(labelSpan);
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = 'translator-pronunciation-value';
+    valueSpan.textContent = value || 'TTS';
+    pill.appendChild(valueSpan);
+
+    if (detail) {
+        const detailSpan = document.createElement('span');
+        detailSpan.className = 'translator-pronunciation-detail';
+        detailSpan.textContent = ` ${detail}`;
+        pill.appendChild(detailSpan);
     }
 
-    if (!bestAudioUrl) {
-        await speakText(word);
-        return;
+    container.appendChild(pill);
+}
+
+function createPronunciationOwnership(data, word, audioUrl) {
+    const phonetic = findPhoneticByText(data?.phonetics, data?.phonetic);
+    const ipaOwner = getPronunciationSourceWord(phonetic, data?.word || word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    const buttonOwner = getLookupPlaybackOwner(data, word, audioUrl);
+    if (!ipaOwner && !audioOwner && !buttonOwner) return null;
+
+    const ownership = document.createElement('div');
+    ownership.className = 'translator-pronunciation-ownership';
+
+    if (ipaOwner) {
+        const detail = phonetic?.source === 'derived-inflection' ? '(inferred)' : '';
+        appendOwnershipPill(ownership, 'IPA shown', ipaOwner, detail);
     }
+
+    if (audioOwner) {
+        appendOwnershipPill(ownership, 'Audio file', audioOwner);
+    }
+
+    if (buttonOwner) {
+        const selectedWord = normalizeLookupWord(word);
+        const detail = audioOwner && audioOwner !== selectedWord ? '(TTS first)' : '';
+        appendOwnershipPill(ownership, 'Button plays', buttonOwner, detail);
+    }
+
+    return ownership.childElementCount ? ownership : null;
+}
+
+function getLookupPlaybackOwner(data, word, audioUrl) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    if (audioOwner && audioOwner !== selectedWord) {
+        return selectedWord;
+    }
+    return audioOwner || selectedWord;
+}
+
+function getLookupAudioTitle(data, word, audioUrl) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    if (audioOwner && audioOwner !== selectedWord) {
+        return `Play: ${selectedWord} via TTS; fallback audio file: ${audioOwner}`;
+    }
+    if (audioOwner) {
+        return `Play audio file: ${audioOwner}`;
+    }
+    return `Play: ${selectedWord || 'word'} via TTS`;
+}
+
+function getAudioSourceWord(phonetics, audioUrl) {
+    if (!audioUrl || !Array.isArray(phonetics)) return '';
+
+    const match = findPhoneticByAudio(phonetics, audioUrl);
+    return normalizeLookupWord(match?.audioSourceWord || match?.sourceWord);
+}
+
+async function playDictionaryAudio(audioUrl) {
+    if (!audioUrl) return false;
 
     try {
         const AudioCtor = getAudioCtor();
-        if (!AudioCtor) {
-            await speakText(word);
-            return;
-        }
-        await new AudioCtor(bestAudioUrl).play();
+        if (!AudioCtor) return false;
+        await new AudioCtor(audioUrl).play();
+        return true;
     } catch {
+        return false;
+    }
+}
+
+async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?.phonetics)) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioSourceWord = getAudioSourceWord(data?.phonetics, bestAudioUrl);
+    const audioBelongsToDifferentWord = audioSourceWord && audioSourceWord !== selectedWord;
+
+    if (audioBelongsToDifferentWord) {
+        const spokeSelectedWord = await speakText(word);
+        if (spokeSelectedWord) return;
+        await playDictionaryAudio(bestAudioUrl);
+        return;
+    }
+
+    const playedDictionaryAudio = await playDictionaryAudio(bestAudioUrl);
+    if (!playedDictionaryAudio) {
         await speakText(word);
     }
 }

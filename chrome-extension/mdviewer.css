@@ -391,36 +391,11 @@ html.viewer-sidebar-open .viewer-container {
 
 /* ==================== Translator Popup Styles (consistent with pdfviewer.css) ==================== */
 
-.translator-source-word {
+.translator-entry-word {
     font-size: 13px;
     color: rgba(255, 255, 255, 0.4);
     margin-top: 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-style: italic;
-}
-
-.translator-mini-speak {
-    width: 14px;
-    height: 14px;
-    cursor: pointer;
-    color: #00d4ff;
-    opacity: 0.6;
-    transition: all 0.2s;
-    display: inline-flex;
-}
-
-.translator-mini-speak:hover {
-    opacity: 1;
-    transform: scale(1.15);
-    filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.5));
-}
-
-.translator-mini-speak svg {
-    width: 100%;
-    height: 100%;
-    fill: currentColor;
+    font-weight: 600;
 }
 
 .translator-popup,
@@ -496,6 +471,46 @@ html.viewer-sidebar-open .viewer-container {
     border-radius: 6px;
     display: inline-block;
     width: fit-content;
+}
+
+.translator-pronunciation-ownership {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    max-width: 100%;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.translator-pronunciation-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    max-width: 100%;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(45, 52, 54, 0.07);
+    color: #53606a;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.translator-pronunciation-label {
+    color: #73808d;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+}
+
+.translator-pronunciation-value {
+    color: #30383d;
+}
+
+.translator-pronunciation-detail {
+    color: #8e44ad;
+    font-style: italic;
 }
 
 .translator-speak-btn {
@@ -775,6 +790,10 @@ html.viewer-sidebar-open .viewer-container {
     .translator-sentence-content { background: rgba(26, 26, 46, 0.95); }
     .translator-word { color: #fff; background: linear-gradient(120deg, #ffffff 0%, #e0e0e0 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
     .translator-phonetic { color: #d6b4fc; background: rgba(214, 180, 252, 0.2); }
+    .translator-pronunciation-pill { background: rgba(255, 255, 255, 0.1); color: #d7dde3; }
+    .translator-pronunciation-label { color: #a7b0ba; }
+    .translator-pronunciation-value { color: #f0f3f6; }
+    .translator-pronunciation-detail { color: #d6b4fc; }
     .translator-definition { color: #ccc; }
     .translator-translation { color: #fff; }
     .translator-example { color: #aaa; }
