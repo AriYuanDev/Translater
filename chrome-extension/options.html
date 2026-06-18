@@ -191,7 +191,13 @@
         .actions {
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
             margin-top: 20px;
+        }
+
+        .actions .btn-secondary {
+            margin-left: 0;
         }
 
         .setting-row {
@@ -324,6 +330,7 @@
 
             <div class="actions">
                 <button class="btn btn-primary" id="saveBtn">Save Key</button>
+                <button class="btn btn-secondary" id="copyDeepLKeyBtn">Copy Key</button>
                 <button class="btn btn-secondary" id="clearBtn">Clear Key</button>
             </div>
         </div>
@@ -381,6 +388,7 @@
 
             <div class="actions">
                 <button class="btn btn-primary" id="saveMWBtn">Save Key</button>
+                <button class="btn btn-secondary" id="copyMWKeyBtn">Copy Key</button>
                 <button class="btn btn-secondary" id="clearMWBtn">Clear Key</button>
             </div>
         </div>

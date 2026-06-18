@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DeepL elements
     const apiKeyInput = document.getElementById('apiKey');
     const saveBtn = document.getElementById('saveBtn');
+    const copyDeepLKeyBtn = document.getElementById('copyDeepLKeyBtn');
     const clearBtn = document.getElementById('clearBtn');
     const statusMessage = document.getElementById('statusMessage');
     const currentEngine = document.getElementById('currentEngine');
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Merriam-Webster elements
     const mwApiKeyInput = document.getElementById('mwApiKey');
     const saveMWBtn = document.getElementById('saveMWBtn');
+    const copyMWKeyBtn = document.getElementById('copyMWKeyBtn');
     const clearMWBtn = document.getElementById('clearMWBtn');
     const mwStatusMessage = document.getElementById('mwStatusMessage');
 
@@ -105,6 +107,14 @@ document.addEventListener('DOMContentLoaded', () => {
             loadCurrentStatus();
             loadDeepLUsage();
         }
+    });
+
+    copyDeepLKeyBtn.addEventListener('click', () => {
+        copySavedApiKey({
+            storageKey: 'deepLApiKey',
+            label: 'DeepL',
+            showInlineStatus: showStatus
+        });
     });
 
     clickTriggerToggle.addEventListener('change', async () => {
@@ -185,6 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('🗑️ Merriam-Webster API key cleared');
             loadMWStatus();
         }
+    });
+
+    copyMWKeyBtn.addEventListener('click', () => {
+        copySavedApiKey({
+            storageKey: 'mwApiKey',
+            label: 'Merriam-Webster',
+            showInlineStatus: showMWStatus
+        });
     });
 
     // ==================== Status Loading ====================
@@ -331,6 +349,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================== UI Helpers ====================
+
+    async function copySavedApiKey({ storageKey, label, showInlineStatus }) {
+        try {
+            const result = await chrome.storage.sync.get([storageKey]);
+            const apiKey = (result[storageKey] || '').trim();
+
+            if (!apiKey) {
+                showInlineStatus(`No saved ${label} API key to copy`, 'warning');
+                return;
+            }
+
+            if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                showInlineStatus('Clipboard is unavailable in this browser context', 'warning');
+                return;
+            }
+
+            await navigator.clipboard.writeText(apiKey);
+            showToast(`${label} API key copied`);
+        } catch (error) {
+            showInlineStatus('Copy failed: ' + error.message, 'warning');
+        }
+    }
 
     // Show DeepL status message
     function showStatus(message, type) {
