@@ -9,132 +9,153 @@
 </head>
 
 <body>
-    <div class="container">
-        <h1>⚡ Translater Settings</h1>
-        <p class="subtitle">Configure translation engines and API keys</p>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">🌐</span>
-                Current Engine
-            </div>
-            <div id="currentEngine">
-                <span class="engine-badge google">⏳ Detecting...</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">🔑</span>
-                DeepL API Configuration
-            </div>
-
-            <div id="statusMessage" class="status hidden"></div>
-
-            <div class="form-group">
-                <label for="apiKey">DeepL API Key</label>
-                <input type="password" id="apiKey" placeholder="Enter your DeepL API key...">
-                <p class="hint">
-                    No key? <a href="https://www.deepl.com/pro-api" target="_blank">Register for a free API key here</a>
+    <main class="settings-shell">
+        <header class="settings-header">
+            <div>
+                <p class="settings-kicker">Chrome extension</p>
+                <h1>Translater Settings</h1>
+                <p class="settings-subtitle">
+                    Configure translation, dictionary lookup, and quota behavior for web pages, PDFs, and Markdown files.
                 </p>
             </div>
+        </header>
 
-            <div class="actions">
-                <button class="btn btn-primary" id="saveBtn">Save Key</button>
-                <button class="btn btn-secondary" id="copyDeepLKeyBtn">Copy Key</button>
-                <button class="btn btn-secondary" id="clearBtn">Clear Key</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">🛡️</span>
-                DeepL Quota Protection
-            </div>
-
-            <div class="setting-row">
-                <div>
-                    <div class="setting-title">Click T to translate</div>
-                    <div class="setting-desc">Default quota-saving mode. Turn off to restore hover-to-translate.</div>
+        <section class="status-grid" aria-label="Configuration status">
+            <article class="status-card">
+                <div class="status-label">Translation</div>
+                <div class="status-value">
+                    <div id="translationStatusTitle" class="status-title">Checking</div>
+                    <span id="translationStatusState" class="status-badge neutral">Loading</span>
                 </div>
-                <label class="switch" for="clickTriggerToggle">
-                    <input type="checkbox" id="clickTriggerToggle" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <p id="translationStatusNote" class="status-note">DeepL configuration is being checked.</p>
+            </article>
 
-            <div class="setting-row">
-                <div>
-                    <div class="setting-title">DeepL usage</div>
-                    <div class="setting-desc" id="deepLUsageStatus">Usage not checked yet.</div>
+            <article class="status-card">
+                <div class="status-label">Dictionary</div>
+                <div class="status-value">
+                    <div id="dictionaryStatusTitle" class="status-title">Checking</div>
+                    <span id="dictionaryStatusState" class="status-badge neutral">Loading</span>
                 </div>
-                <button class="btn btn-secondary" id="refreshUsageBtn">Refresh</button>
-            </div>
+                <p id="dictionaryStatusNote" class="status-note">Merriam-Webster configuration is being checked.</p>
+            </article>
 
-            <div class="setting-row">
-                <div>
-                    <div class="setting-title">Translation cache</div>
-                    <div class="setting-desc" id="translationCacheStatus">Cache status not loaded.</div>
+            <article class="status-card">
+                <div class="status-label">Quota</div>
+                <div class="status-value">
+                    <div id="quotaStatusTitle" class="status-title">Checking</div>
+                    <span id="quotaStatusState" class="status-badge neutral">Loading</span>
                 </div>
-                <button class="btn btn-secondary" id="clearTranslationCacheBtn">Clear Cache</button>
+                <p id="quotaStatusNote" class="status-note">DeepL usage is being checked.</p>
+            </article>
+        </section>
+
+        <div id="currentEngine" hidden></div>
+
+        <div class="settings-grid">
+            <div class="settings-column">
+                <section class="settings-panel" data-settings-section="translation" aria-labelledby="translationSettingsTitle">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="translationSettingsTitle" class="panel-title">Translation</h2>
+                            <p class="panel-desc">DeepL powers selected text translation and dictionary-definition translation.</p>
+                        </div>
+                    </div>
+
+                    <div id="statusMessage" class="status hidden" role="status" aria-live="polite"></div>
+
+                    <div class="field-group">
+                        <label for="apiKey">DeepL API key</label>
+                        <input type="password" id="apiKey" autocomplete="off" placeholder="Paste your DeepL API key">
+                        <p class="field-help">
+                            Selection translation requires DeepL. Requests are limited to 500 characters.
+                            <a href="https://www.deepl.com/pro-api" target="_blank" rel="noreferrer">Get a DeepL API key</a>.
+                        </p>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="saveBtn">Save key</button>
+                        <button class="btn btn-secondary" id="copyDeepLKeyBtn">Copy key</button>
+                        <button class="btn btn-secondary" id="clearBtn">Clear key</button>
+                    </div>
+                </section>
+
+                <section class="settings-panel" data-settings-section="dictionary" aria-labelledby="dictionarySettingsTitle">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="dictionarySettingsTitle" class="panel-title">Dictionary</h2>
+                            <p class="panel-desc">Merriam-Webster Learners API powers word definitions, IPA, and dictionary audio.</p>
+                        </div>
+                    </div>
+
+                    <div id="mwStatusMessage" class="status hidden" role="status" aria-live="polite"></div>
+
+                    <div class="field-group">
+                        <label for="mwApiKey">Merriam-Webster API key</label>
+                        <input type="password" id="mwApiKey" autocomplete="off" placeholder="Paste your Learners Dictionary API key">
+                        <p class="field-help">
+                            Choose the Learners Dictionary API when registering.
+                            <a href="https://dictionaryapi.com/register/index" target="_blank" rel="noreferrer">Get a Merriam-Webster key</a>.
+                        </p>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="saveMWBtn">Save key</button>
+                        <button class="btn btn-secondary" id="copyMWKeyBtn">Copy key</button>
+                        <button class="btn btn-secondary" id="clearMWBtn">Clear key</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="settings-column">
+                <section class="settings-panel" data-settings-section="behavior" aria-labelledby="behaviorSettingsTitle">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="behaviorSettingsTitle" class="panel-title">Behavior</h2>
+                            <p class="panel-desc">Choose how selected text opens translation actions.</p>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-title">Click T to translate</div>
+                            <div class="setting-desc">Default quota-saving mode. Turn off for hover-to-translate.</div>
+                        </div>
+                        <label class="switch" for="clickTriggerToggle" aria-label="Click T to translate">
+                            <input type="checkbox" id="clickTriggerToggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="settings-panel" data-settings-section="usage" aria-labelledby="usageSettingsTitle">
+                    <div class="panel-header">
+                        <div>
+                            <h2 id="usageSettingsTitle" class="panel-title">Usage</h2>
+                            <p class="panel-desc">Monitor quota and manage cached translations.</p>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-title">DeepL usage</div>
+                            <div class="setting-desc" id="deepLUsageStatus">Usage not checked yet.</div>
+                        </div>
+                        <button class="btn btn-secondary" id="refreshUsageBtn">Refresh</button>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-title">Translation cache</div>
+                            <div class="setting-desc" id="translationCacheStatus">Cache status not loaded.</div>
+                        </div>
+                        <button class="btn btn-secondary" id="clearTranslationCacheBtn">Clear cache</button>
+                    </div>
+                </section>
             </div>
         </div>
+    </main>
 
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">📖</span>
-                Merriam-Webster Dictionary API
-            </div>
-
-            <div id="mwStatusMessage" class="status hidden"></div>
-
-            <div class="form-group">
-                <label for="mwApiKey">Merriam-Webster API Key</label>
-                <input type="password" id="mwApiKey" placeholder="Enter your MW API key...">
-                <p class="hint">
-                    No key? <a href="https://dictionaryapi.com/register/index" target="_blank">Register for free
-                        here</a> (Choose <b>Learners Dictionary</b>)
-                </p>
-            </div>
-
-            <div class="actions">
-                <button class="btn btn-primary" id="saveMWBtn">Save Key</button>
-                <button class="btn btn-secondary" id="copyMWKeyBtn">Copy Key</button>
-                <button class="btn btn-secondary" id="clearMWBtn">Clear Key</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">📊</span>
-                DeepL Behavior
-            </div>
-            <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <th style="text-align: left; padding: 12px 0; color: #888;">Feature</th>
-                    <th style="text-align: center; padding: 12px 0; color: #00d4ff;">Current Setting</th>
-                </tr>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">Selection translation</td>
-                    <td style="text-align: center;">DeepL API key required</td>
-                </tr>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">Text limit</td>
-                    <td style="text-align: center;">500 chars/request</td>
-                </tr>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px 0;">Free quota</td>
-                    <td style="text-align: center;">500k chars/mo</td>
-                </tr>
-                <tr>
-                    <td style="padding: 12px 0;">Dictionary definitions</td>
-                    <td style="text-align: center;">Click each definition to translate</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-
-    <div class="toast" id="toast">✅ Settings saved</div>
+    <div class="toast" id="toast" role="status" aria-live="polite">Settings saved</div>
 
     <script type="module" src="options.js"></script>
 </body>
