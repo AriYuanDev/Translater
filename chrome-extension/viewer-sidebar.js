@@ -1,4 +1,4 @@
-import { createViewerUrlForDocument } from './viewer-routing.js';
+import { createViewerUrlForDocument, isFileUrl } from './viewer-routing.js';
 import {
     createDocumentEntry,
     getDirectoryLabel,
@@ -9,6 +9,8 @@ import {
     shouldFallbackToCurrentDocument
 } from './viewer-sidebar-helpers.js';
 
+const ROOT_SIDEBAR_OPEN_CLASS = 'viewer-sidebar-open';
+
 async function loadDirectoryDocuments(currentUrl, targetDirectoryUrl = getDirectoryUrl(currentUrl)) {
     const directoryUrl = normalizeUrl(targetDirectoryUrl);
     if (!directoryUrl) {
@@ -16,7 +18,7 @@ async function loadDirectoryDocuments(currentUrl, targetDirectoryUrl = getDirect
     }
 
     const response = await fetch(directoryUrl);
-    const isReadableFileResponse = directoryUrl.startsWith('file://') && response.status === 0;
+    const isReadableFileResponse = isFileUrl(directoryUrl) && response.status === 0;
     if (!response.ok && !isReadableFileResponse) {
         throw new Error(`HTTP ${response.status}`);
     }
@@ -176,7 +178,7 @@ function renderCurrentDocumentFallback(container, currentUrl, options = {}) {
 }
 
 function getLoadErrorMessage(currentUrl, error) {
-    if (String(currentUrl || '').startsWith('file://')) {
+    if (isFileUrl(currentUrl)) {
         return 'Unable to read this folder. Enable “Allow access to file URLs” for the extension first.';
     }
 
@@ -203,6 +205,29 @@ export function setupViewerSidebar({
     let activeDirectoryUrl = currentDirectoryUrl;
     let loadRequestId = 0;
 
+    const syncSidebarUrlState = (isOpen) => {
+        try {
+            const url = new URL(window.location.href);
+            if (isOpen) {
+                url.searchParams.set('sidebar', 'open');
+            } else {
+                url.searchParams.delete('sidebar');
+            }
+            window.history.replaceState(window.history.state, document.title, url.toString());
+        } catch {
+            // Keep sidebar toggling usable even if history APIs are unavailable.
+        }
+    };
+
+    const setSidebarOpen = (isOpen, { syncUrl = false } = {}) => {
+        sidebar.classList.toggle('open', isOpen);
+        viewerContainer.classList.toggle('sidebar-open', isOpen);
+        document.documentElement.classList.toggle(ROOT_SIDEBAR_OPEN_CLASS, isOpen);
+        if (syncUrl) {
+            syncSidebarUrlState(isOpen);
+        }
+    };
+
     const setActivePanel = (panelName) => {
         tabButtons.forEach(button => {
             button.classList.toggle('active', button.dataset.sidebarPanel === panelName);
@@ -219,13 +244,11 @@ export function setupViewerSidebar({
     });
 
     sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
-        viewerContainer.classList.toggle('sidebar-open');
+        setSidebarOpen(!sidebar.classList.contains('open'), { syncUrl: true });
     });
 
     if (new URLSearchParams(window.location.search).get('sidebar') === 'open') {
-        sidebar.classList.add('open');
-        viewerContainer.classList.add('sidebar-open');
+        setSidebarOpen(true);
     }
 
     setActivePanel(defaultPanel);

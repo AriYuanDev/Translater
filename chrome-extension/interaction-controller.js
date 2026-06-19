@@ -1,9 +1,11 @@
 import {
-    createSpeakerSVG,
     calculatePopupPosition,
     sendMessageSafe,
     speakText,
+    isAllEnglish,
     isContextValid,
+    isProbablyWord,
+    getTextSelectionAction,
     ensureShadowRoot,
     createCloseButton,
     createSpeakButton,
@@ -12,8 +14,19 @@ import {
     setCurrentPopup,
     findBestAudioUrl,
     createDefinitionPair,
+    showSelectionToolbar,
     showSentencePopup
 } from './utils.js';
+
+const MAX_TRANSLATION_TEXT_CHARS = 500;
+
+function replaceSentenceContent(content, className, message) {
+    content.innerHTML = '';
+    const node = document.createElement('div');
+    node.className = className;
+    node.textContent = message;
+    content.appendChild(node);
+}
 
 function createWordPopup(word, x, y, popupWidth, popupHeight) {
     const popup = document.createElement('div');
@@ -34,9 +47,7 @@ function createWordPopup(word, x, y, popupWidth, popupHeight) {
     wordInfo.appendChild(wordSpan);
 
     header.appendChild(wordInfo);
-    header.appendChild(createSpeakButton(() => {
-        speakText(word);
-    }));
+    header.appendChild(createSpeakButton(() => speakText(word)));
 
     const meanings = document.createElement('div');
     meanings.className = 'translator-meanings';
@@ -85,6 +96,32 @@ function updateWordPopupWithTranslation(popup, translatedText) {
     meanings.appendChild(result);
 }
 
+function getRenderableMeanings(data) {
+    if (!Array.isArray(data?.meanings)) return [];
+
+    return data.meanings
+        .map(meaning => {
+            const definitions = Array.isArray(meaning?.definitions)
+                ? meaning.definitions
+                    .map(definition => ({
+                        definition: String(definition?.definition || '').trim(),
+                        example: String(definition?.example || '').trim()
+                    }))
+                    .filter(definition => definition.definition)
+                : [];
+
+            return {
+                partOfSpeech: String(meaning?.partOfSpeech || 'word'),
+                definitions
+            };
+        })
+        .filter(meaning => meaning.definitions.length > 0);
+}
+
+function hasRenderableDictionaryData(data) {
+    return getRenderableMeanings(data).length > 0;
+}
+
 function updateWordPopupWithData(popup, data, word) {
     if (!popup || !data) return;
 
@@ -99,27 +136,18 @@ function updateWordPopupWithData(popup, data, word) {
     const info = document.createElement('div');
     info.className = 'translator-word-info';
 
-    const resolvedWord = data.word || word;
+    const selectedWord = word || data.word;
+    const resolvedWord = data.word || selectedWord;
     const wordSpan = document.createElement('span');
     wordSpan.className = 'translator-word';
-    wordSpan.textContent = resolvedWord;
+    wordSpan.textContent = selectedWord;
     info.appendChild(wordSpan);
 
-    if (data.word && word && data.word.toLowerCase() !== word.toLowerCase()) {
-        const sourceSpan = document.createElement('span');
-        sourceSpan.className = 'translator-source-word';
-        sourceSpan.textContent = `(from ${word}) `;
-
-        const miniSpeakButton = document.createElement('span');
-        miniSpeakButton.className = 'translator-mini-speak';
-        miniSpeakButton.innerHTML = createSpeakerSVG();
-        miniSpeakButton.onclick = event => {
-            event.stopPropagation();
-            speakText(word);
-        };
-
-        sourceSpan.appendChild(miniSpeakButton);
-        info.appendChild(sourceSpan);
+    if (resolvedWord && selectedWord && normalizeLookupWord(resolvedWord) !== normalizeLookupWord(selectedWord)) {
+        const entrySpan = document.createElement('span');
+        entrySpan.className = 'translator-entry-word';
+        entrySpan.textContent = `Dictionary entry: ${resolvedWord}`;
+        info.appendChild(entrySpan);
     }
 
     if (data.phonetic) {
@@ -129,16 +157,24 @@ function updateWordPopupWithData(popup, data, word) {
         info.appendChild(phonetic);
     }
 
+    const bestAudioUrl = findBestAudioUrl(data.phonetics);
+    const ownership = createPronunciationOwnership(data, word, bestAudioUrl);
+    if (ownership) {
+        info.appendChild(ownership);
+    }
+
     header.appendChild(info);
 
-    const bestAudioUrl = findBestAudioUrl(data.phonetics);
-    header.appendChild(createSpeakButton(() => playLookupAudio(data, word, bestAudioUrl)));
+    const speakButton = createSpeakButton(() => playLookupAudio(data, word, bestAudioUrl));
+    speakButton.title = getLookupAudioTitle(data, word, bestAudioUrl);
+    header.appendChild(speakButton);
 
     const meanings = document.createElement('div');
     meanings.className = 'translator-meanings';
+    const renderableMeanings = getRenderableMeanings(data);
 
-    if (data.meanings?.length) {
-        data.meanings.slice(0, 3).forEach(meaning => {
+    if (renderableMeanings.length) {
+        renderableMeanings.slice(0, 3).forEach(meaning => {
             const item = document.createElement('div');
             item.className = 'translator-meaning-item';
 
@@ -170,24 +206,163 @@ function updateWordPopupWithData(popup, data, word) {
     content.appendChild(meanings);
 }
 
-async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?.phonetics)) {
-    const isMorphed = data?.word && word && data.word.toLowerCase() !== word.toLowerCase();
+function getAudioCtor() {
+    if (typeof globalThis !== 'undefined' && globalThis.Audio) {
+        return globalThis.Audio;
+    }
+    if (typeof window !== 'undefined' && window.Audio) {
+        return window.Audio;
+    }
+    if (typeof Audio !== 'undefined') {
+        return Audio;
+    }
+    return null;
+}
 
-    if (isMorphed) {
-        await speakText(word);
-        return;
+function normalizeLookupWord(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function findPhoneticByText(phonetics, phoneticText) {
+    if (!Array.isArray(phonetics)) return null;
+    return phonetics.find(phonetic => phonetic?.text && phonetic.text === phoneticText) || null;
+}
+
+function findPhoneticByAudio(phonetics, audioUrl) {
+    if (!audioUrl || !Array.isArray(phonetics)) return null;
+    return phonetics.find(phonetic => phonetic?.audio === audioUrl) || null;
+}
+
+function getPronunciationSourceWord(phonetic, fallbackWord) {
+    return normalizeLookupWord(phonetic?.sourceWord || fallbackWord);
+}
+
+function getAudioOwnerWord(data, word, audioUrl) {
+    if (!audioUrl) return '';
+    const audioPhonetic = findPhoneticByAudio(data?.phonetics, audioUrl);
+    return normalizeLookupWord(audioPhonetic?.audioSourceWord || audioPhonetic?.sourceWord || word);
+}
+
+function appendOwnershipPill(container, label, value, detail = '') {
+    const pill = document.createElement('span');
+    pill.className = 'translator-pronunciation-pill';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'translator-pronunciation-label';
+    labelSpan.textContent = `${label}:`;
+    pill.appendChild(labelSpan);
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = 'translator-pronunciation-value';
+    valueSpan.textContent = value || 'TTS';
+    pill.appendChild(valueSpan);
+
+    if (detail) {
+        const detailSpan = document.createElement('span');
+        detailSpan.className = 'translator-pronunciation-detail';
+        detailSpan.textContent = ` ${detail}`;
+        pill.appendChild(detailSpan);
     }
 
-    if (!bestAudioUrl) {
-        await speakText(word);
-        return;
+    container.appendChild(pill);
+}
+
+function createPronunciationOwnership(data, word, audioUrl) {
+    const phonetic = findPhoneticByText(data?.phonetics, data?.phonetic);
+    const ipaOwner = getPronunciationSourceWord(phonetic, data?.word || word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    const buttonOwner = getLookupPlaybackOwner(data, word, audioUrl);
+    if (!ipaOwner && !audioOwner && !buttonOwner) return null;
+
+    const ownership = document.createElement('div');
+    ownership.className = 'translator-pronunciation-ownership';
+
+    if (ipaOwner) {
+        const detail = phonetic?.source === 'derived-inflection' ? '(inferred)' : '';
+        appendOwnershipPill(ownership, 'IPA shown', ipaOwner, detail);
     }
+
+    if (audioOwner) {
+        appendOwnershipPill(ownership, 'Audio file', audioOwner);
+    }
+
+    if (buttonOwner) {
+        const selectedWord = normalizeLookupWord(word);
+        const detail = audioOwner && audioOwner !== selectedWord ? '(TTS first)' : '';
+        appendOwnershipPill(ownership, 'Button plays', buttonOwner, detail);
+    }
+
+    return ownership.childElementCount ? ownership : null;
+}
+
+function getLookupPlaybackOwner(data, word, audioUrl) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    if (audioOwner && audioOwner !== selectedWord) {
+        return selectedWord;
+    }
+    return audioOwner || selectedWord;
+}
+
+function getLookupAudioTitle(data, word, audioUrl) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioOwner = getAudioOwnerWord(data, word, audioUrl);
+    if (audioOwner && audioOwner !== selectedWord) {
+        return `Play: ${selectedWord} via TTS; fallback audio file: ${audioOwner}`;
+    }
+    if (audioOwner) {
+        return `Play audio file: ${audioOwner}`;
+    }
+    return `Play: ${selectedWord || 'word'} via TTS`;
+}
+
+function getAudioSourceWord(phonetics, audioUrl) {
+    if (!audioUrl || !Array.isArray(phonetics)) return '';
+
+    const match = findPhoneticByAudio(phonetics, audioUrl);
+    return normalizeLookupWord(match?.audioSourceWord || match?.sourceWord);
+}
+
+async function playDictionaryAudio(audioUrl) {
+    if (!audioUrl) return false;
 
     try {
-        await new Audio(bestAudioUrl).play();
+        const AudioCtor = getAudioCtor();
+        if (!AudioCtor) return false;
+        await new AudioCtor(audioUrl).play();
+        return true;
     } catch {
+        return false;
+    }
+}
+
+async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?.phonetics)) {
+    const selectedWord = normalizeLookupWord(word);
+    const audioSourceWord = getAudioSourceWord(data?.phonetics, bestAudioUrl);
+    const audioBelongsToDifferentWord = audioSourceWord && audioSourceWord !== selectedWord;
+
+    if (audioBelongsToDifferentWord) {
+        const spokeSelectedWord = await speakText(word);
+        if (spokeSelectedWord) return;
+        await playDictionaryAudio(bestAudioUrl);
+        return;
+    }
+
+    const playedDictionaryAudio = await playDictionaryAudio(bestAudioUrl);
+    if (!playedDictionaryAudio) {
         await speakText(word);
     }
+}
+
+function getCurrentSelectionText() {
+    return window.getSelection()?.toString().trim() || '';
+}
+
+function resolveInteractionOptions(options, ...args) {
+    if (typeof options === 'function') {
+        return options(...args) || {};
+    }
+    return options || {};
 }
 
 export async function handleWordLookupInteraction({
@@ -195,9 +370,16 @@ export async function handleWordLookupInteraction({
     x,
     y,
     popupWidth = Math.min(760, window.innerWidth - 20),
-    popupHeight = 260
+    popupHeight = 260,
+    speakOnOpen = false
 }) {
     if (!isContextValid() || !word) return null;
+
+    if (speakOnOpen) {
+        void speakText(word).catch(error => {
+            console.warn('[Translater] Speak failed:', error);
+        });
+    }
 
     const root = await ensureShadowRoot();
     if (!root) return null;
@@ -217,9 +399,8 @@ export async function handleWordLookupInteraction({
         return popup;
     }
 
-    if (response && response.success && response.data) {
+    if (response && response.success && hasRenderableDictionaryData(response.data)) {
         updateWordPopupWithData(popup, response.data, word);
-        void playLookupAudio(response.data, word).catch(() => {});
         return popup;
     }
 
@@ -235,12 +416,81 @@ export async function handleWordLookupInteraction({
 
     if (translation && translation.success && translation.data) {
         updateWordPopupWithTranslation(popup, translation.data.translated || 'No results');
-        void speakText(word).catch(() => {});
     } else {
         updateWordPopupWithError(popup, (translation && translation.error) || 'Query failed');
     }
 
     return popup;
+}
+
+export async function handleWordLookupFromSelection(event, options = {}) {
+    if (!isContextValid()) return false;
+
+    const {
+        getSelectionText = getCurrentSelectionText,
+        getWordPopupOptions = {},
+        speakOnOpen = true
+    } = options;
+    const word = getSelectionText(event).trim();
+    if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return false;
+
+    await handleWordLookupInteraction({
+        word,
+        x: event.clientX,
+        y: event.clientY,
+        ...resolveInteractionOptions(getWordPopupOptions, event, word),
+        speakOnOpen
+    });
+    return true;
+}
+
+export function handleReaderSelectionRelease(event, options = {}) {
+    if (!isContextValid()) return false;
+    if (event.detail > 1) return false;
+
+    const {
+        getSelectionText = getCurrentSelectionText,
+        getWordPopupOptions = {},
+        getSentencePopupOptions = {},
+        minTop = 60,
+        delayMs = 50,
+        translateTriggerMode
+    } = options;
+
+    setTimeout(async () => {
+        try {
+            const text = getSelectionText(event).trim();
+            const action = getTextSelectionAction(text);
+            if (event.target?.id === 'translator-extension-host') return;
+            if (action === 'none') return;
+            if (action === 'word-lookup') {
+                await handleWordLookupInteraction({
+                    word: text,
+                    x: event.clientX,
+                    y: event.clientY,
+                    ...resolveInteractionOptions(getWordPopupOptions, event, text)
+                });
+                return;
+            }
+            await showSelectionToolbar({
+                text,
+                x: event.clientX,
+                y: event.clientY,
+                minTop,
+                translateTriggerMode,
+                onTranslate: (selectedText, x, y) => handleSelectionTranslation({
+                    text: selectedText,
+                    x,
+                    y,
+                    ...resolveInteractionOptions(getSentencePopupOptions, event, selectedText)
+                })
+            });
+        } catch (err) {
+            console.error('[Translater] Selection interaction failed:', err);
+        }
+    }, delayMs);
+
+    return true;
 }
 
 export async function handleSelectionTranslation({
@@ -260,19 +510,32 @@ export async function handleSelectionTranslation({
     });
     if (!popup || !content) return null;
 
+    if (text.trim().length > MAX_TRANSLATION_TEXT_CHARS) {
+        replaceSentenceContent(
+            content,
+            'translator-error',
+            'Selected text exceeds 500 characters. Please shorten the selection.'
+        );
+        return popup;
+    }
+
     const response = await sendMessageSafe({ action: 'translate', text });
     if (!isContextValid() || getCurrentPopup() !== popup) {
         return popup;
     }
 
     if (response && response.success && response.data) {
-        content.innerHTML = '';
-        const result = document.createElement('div');
-        result.className = 'translator-result';
-        result.textContent = response.data.translated || 'No translation results';
-        content.appendChild(result);
+        replaceSentenceContent(
+            content,
+            'translator-result',
+            response.data.translated || 'No translation results'
+        );
     } else {
-        content.textContent = `❌ ${(response && response.error) || 'Translation failed'}`;
+        replaceSentenceContent(
+            content,
+            'translator-error',
+            `❌ ${(response && response.error) || 'Translation failed'}`
+        );
     }
 
     return popup;

@@ -265,6 +265,34 @@ export async function sendMessageSafe(message, timeoutMs = 15000) {
 }
 
 const definitionTranslationCache = new Map();
+const DEFAULT_TRANSLATE_TRIGGER_MODE = 'click';
+
+function normalizeTranslateTriggerMode(mode) {
+    return mode === 'hover' ? 'hover' : DEFAULT_TRANSLATE_TRIGGER_MODE;
+}
+
+async function resolveTranslateTriggerMode(explicitMode) {
+    if (explicitMode) return normalizeTranslateTriggerMode(explicitMode);
+
+    const response = await sendMessageSafe({ action: 'getTranslationTriggerMode' }, 1000);
+    if (response && response.success && response.data) {
+        return normalizeTranslateTriggerMode(response.data.mode);
+    }
+    return DEFAULT_TRANSLATE_TRIGGER_MODE;
+}
+
+function getFriendlyTranslationError(result) {
+    if (result && result.errorCode === 'TEXT_TOO_LONG') {
+        return 'Selected text exceeds 500 characters. Please shorten the selection.';
+    }
+    if (result && result.errorCode === 'QUOTA_EXCEEDED') {
+        return 'DeepL quota exceeded. Please wait for quota reset or update your API plan.';
+    }
+    if (result && result.error === 'Please configure DeepL API Key') {
+        return 'Please configure a DeepL API Key in extension options';
+    }
+    return (result && result.error) || 'Translation unavailable';
+}
 
 /**
  * Retrieves or creates a cached translation request for a dictionary definition.
@@ -306,119 +334,193 @@ export function createDefinitionPair(definitionText) {
 
     const chinese = document.createElement('div');
     chinese.className = 'translator-definition translator-definition-zh';
-    chinese.textContent = trimmed ? 'Translating…' : '—';
     chinese.dataset.definitionKey = trimmed;
     pair.appendChild(chinese);
 
     if (trimmed) {
-        getDefinitionTranslationPromise(trimmed).then(result => {
-            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
-            if (result && result.success && result.data && result.data.translated) {
-                chinese.textContent = result.data.translated;
-                chinese.classList.remove('translator-definition-zh-error');
-            } else {
-                const localizedError = (result && result.error === 'Please configure DeepL API Key')
-                    ? 'Please configure a DeepL API Key in extension options'
-                    : (result && result.error) || 'Translation unavailable';
-                chinese.textContent = localizedError;
+        const translateButton = document.createElement('button');
+        translateButton.type = 'button';
+        translateButton.className = 'translator-translate-definition-btn';
+        translateButton.textContent = 'Translate';
+
+        const resultText = document.createElement('div');
+        resultText.className = 'translator-definition-translation-result';
+        resultText.textContent = 'Click Translate to save DeepL quota.';
+
+        translateButton.addEventListener('click', async event => {
+            event.stopPropagation();
+            translateButton.disabled = true;
+            resultText.textContent = 'Translating…';
+            try {
+                const result = await getDefinitionTranslationPromise(trimmed);
+                if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+                if (result && result.success && result.data && result.data.translated) {
+                    resultText.textContent = result.data.translated;
+                    chinese.classList.remove('translator-definition-zh-error');
+                } else {
+                    resultText.textContent = getFriendlyTranslationError(result);
+                    chinese.classList.add('translator-definition-zh-error');
+                    translateButton.disabled = false;
+                }
+            } catch {
+                if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
+                resultText.textContent = 'Translation failed';
                 chinese.classList.add('translator-definition-zh-error');
+                translateButton.disabled = false;
             }
-        }).catch(() => {
-            if (!chinese.isConnected || chinese.dataset.definitionKey != trimmed) return;
-            chinese.textContent = 'Translation failed';
-            chinese.classList.add('translator-definition-zh-error');
         });
+
+        chinese.append(translateButton, resultText);
+    } else {
+        chinese.textContent = '—';
     }
 
     return pair;
 }
 
-// Ensure speech voices are loaded with timeout protection
-function waitForVoices(timeoutMs = 3000) {
-    return new Promise((resolve) => {
-        const speechApi = window.speechSynthesis;
-        const voices = speechApi.getVoices();
-        if (voices.length > 0) {
-            resolve(voices);
-            return;
-        }
+let cachedSpeechVoices = [];
 
-        let settled = false;
-        let timeoutId = null;
-
-        const cleanup = () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-            if (typeof speechApi.removeEventListener === 'function') {
-                speechApi.removeEventListener('voiceschanged', handler);
-            }
-        };
-
-        const finish = () => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            resolve(speechApi.getVoices());
-        };
-
-        const handler = () => {
-            finish();
-        };
-
-        timeoutId = setTimeout(finish, timeoutMs);
-
-        if (typeof speechApi.addEventListener === 'function') {
-            speechApi.addEventListener('voiceschanged', handler);
-        } else {
-            const previousHandler = speechApi.onvoiceschanged;
-            speechApi.onvoiceschanged = (event) => {
-                if (typeof previousHandler === 'function') {
-                    previousHandler.call(speechApi, event);
-                }
-                finish();
-            };
-        }
-
-        speechApi.getVoices();
-    });
+function getSpeechSynthesisApi() {
+    if (typeof globalThis !== 'undefined' && globalThis.speechSynthesis) {
+        return globalThis.speechSynthesis;
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+        return window.speechSynthesis;
+    }
+    if (typeof speechSynthesis !== 'undefined') {
+        return speechSynthesis;
+    }
+    return null;
 }
 
-// Generic TTS speech driver
-/**
- * Uses the Web Speech API to speak the given text.
- * @param {string} text - The text to speak.
- * @param {Object} [options={}] - Speech options (lang, rate, pitch).
- * @returns {Promise<void>}
- */
-export async function speakText(text, options = {}) {
-    if (!text) return;
+function getSpeechSynthesisUtteranceCtor() {
+    if (typeof globalThis !== 'undefined' && globalThis.SpeechSynthesisUtterance) {
+        return globalThis.SpeechSynthesisUtterance;
+    }
+    if (typeof window !== 'undefined' && window.SpeechSynthesisUtterance) {
+        return window.SpeechSynthesisUtterance;
+    }
+    if (typeof SpeechSynthesisUtterance !== 'undefined') {
+        return SpeechSynthesisUtterance;
+    }
+    return null;
+}
 
-    if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
+function refreshSpeechVoices(speechApi) {
+    if (!speechApi || typeof speechApi.getVoices !== 'function') {
+        return cachedSpeechVoices;
     }
 
+    const voices = speechApi.getVoices();
+    if (voices.length > 0) {
+        cachedSpeechVoices = voices;
+    }
+    return cachedSpeechVoices;
+}
+
+function findPreferredSpeechVoice(voices) {
+    return voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
+        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
+        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
+        || voices.find(v => v.lang.startsWith('en-US'))
+        || voices.find(v => v.lang.startsWith('en'));
+}
+
+function resumeSpeechIfPaused(speechApi) {
+    if (typeof speechApi.resume !== 'function') return;
+
+    speechApi.resume();
+    setTimeout(() => {
+        if (speechApi.paused) {
+            speechApi.resume();
+        }
+    }, 0);
+}
+
+export function preloadSpeechVoices() {
+    const speechApi = getSpeechSynthesisApi();
+    if (!speechApi || !getSpeechSynthesisUtteranceCtor()) return false;
+
+    refreshSpeechVoices(speechApi);
+
+    if (typeof speechApi.addEventListener === 'function') {
+        speechApi.addEventListener('voiceschanged', () => {
+            refreshSpeechVoices(speechApi);
+        }, { once: true });
+    }
+
+    return true;
+}
+
+async function speakTextWithExtensionTts(text, options) {
+    if (typeof chrome === 'undefined'
+        || !chrome.runtime
+        || typeof chrome.runtime.sendMessage !== 'function') {
+        return false;
+    }
+
+    const response = await sendMessageSafe({
+        action: 'speakText',
+        text,
+        options
+    }, 3000);
+
+    if (response && response.success) {
+        return true;
+    }
+
+    if (response?.errorCode && response.errorCode !== 'TTS_UNAVAILABLE') {
+        console.warn('[Translater] Chrome TTS failed:', response.error || response.errorCode);
+    }
+    return false;
+}
+
+function speakTextWithWebSpeech(text, options = {}) {
+    const speechApi = getSpeechSynthesisApi();
+    const Utterance = getSpeechSynthesisUtteranceCtor();
+    if (!speechApi || !Utterance || typeof speechApi.speak !== 'function') {
+        return false;
+    }
+
+    if ((speechApi.speaking || speechApi.pending || speechApi.paused) && typeof speechApi.cancel === 'function') {
+        speechApi.cancel();
+    }
+    resumeSpeechIfPaused(speechApi);
+
     const { lang = 'en-US', rate = 1.0, pitch = 1.0, volume = 0.8 } = options;
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new Utterance(text);
     utterance.lang = lang;
     utterance.rate = rate;
     utterance.pitch = pitch;
     utterance.volume = volume;
 
-    // Select the best voice
-    const voices = await waitForVoices();
-    const usVoice = voices.find(v => v.name.includes('p5712') && v.lang.startsWith('en'))
-        || voices.find(v => v.name.includes('Piper') && v.lang.startsWith('en'))
-        || voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
-        || voices.find(v => v.lang.startsWith('en-US'))
-        || voices.find(v => v.lang.startsWith('en'));
+    const usVoice = findPreferredSpeechVoice(refreshSpeechVoices(speechApi));
 
     if (usVoice) {
         utterance.voice = usVoice;
     }
 
-    window.speechSynthesis.speak(utterance);
+    speechApi.speak(utterance);
+    resumeSpeechIfPaused(speechApi);
+    return true;
+}
+
+// Generic TTS speech driver
+/**
+ * Speaks the given text through extension TTS, with Web Speech as a fallback.
+ * @param {string} text - The text to speak.
+ * @param {Object} [options={}] - Speech options (lang, rate, pitch).
+ * @returns {Promise<boolean>} True when extension TTS or Web Speech accepted the utterance.
+ */
+export async function speakText(text, options = {}) {
+    if (!text) return false;
+
+    const spokeWithExtensionTts = await speakTextWithExtensionTts(text, options);
+    if (spokeWithExtensionTts) {
+        return true;
+    }
+
+    return speakTextWithWebSpeech(text, options);
 }
 
 /**
@@ -527,7 +629,9 @@ export function createSpeakButton(onClick) {
     if (onClick) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            onClick();
+            Promise.resolve(onClick()).catch(error => {
+                console.warn('[Translater] Speak failed:', error);
+            });
         });
     }
     return btn;
@@ -587,7 +691,8 @@ export async function showSentencePopup(x, y, options = {}) {
  * @returns {Promise<HTMLElement|null>}
  */
 export async function showSelectionToolbar(options) {
-    const { text, x, y, onTranslate, minTop = 44 } = options;
+    const { text, x, y, onTranslate, minTop = 44, translateTriggerMode } = options;
+    const resolvedTriggerMode = await resolveTranslateTriggerMode(translateTriggerMode);
     removeFloatButtons();
 
     const root = await ensureShadowRoot();
@@ -603,13 +708,25 @@ export async function showSelectionToolbar(options) {
     speakBtn.className = 'translator-float-btn speak-btn';
     speakBtn.innerHTML = createSpeakerSVG();
     speakBtn.setAttribute('data-tooltip', 'Speak');
-    speakBtn.onclick = () => speakText(text);
+    speakBtn.onclick = event => {
+        event.stopPropagation();
+        void speakText(text).catch(error => {
+            console.warn('[Translater] Speak failed:', error);
+        });
+    };
 
     const transBtn = document.createElement('button');
     transBtn.className = 'translator-float-btn translate-btn';
     transBtn.textContent = 'T';
-    transBtn.setAttribute('data-tooltip', 'Translate');
-    transBtn.onmouseenter = () => onTranslate(text, x, y);
+    transBtn.setAttribute('data-tooltip', resolvedTriggerMode === 'hover' ? 'Hover to translate' : 'Click to translate');
+    if (resolvedTriggerMode === 'hover') {
+        transBtn.onmouseenter = () => onTranslate(text, x, y);
+    } else {
+        transBtn.onclick = event => {
+            event.stopPropagation();
+            onTranslate(text, x, y);
+        };
+    }
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'translator-float-btn close-floating-btn';

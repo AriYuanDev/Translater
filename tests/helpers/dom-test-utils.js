@@ -54,7 +54,8 @@ export function teardownDom(dom) {
         'Range',
         'chrome',
         'Audio',
-        'speechSynthesis'
+        'speechSynthesis',
+        'SpeechSynthesisUtterance'
     ].forEach(key => {
         delete globalThis[key];
     });
@@ -81,10 +82,24 @@ export function installChromeStub(sendMessageHandler = async () => undefined) {
 }
 
 export function installSpeechSynthesisStub() {
+    class FakeSpeechSynthesisUtterance {
+        constructor(text) {
+            this.text = text;
+            this.lang = '';
+            this.rate = 1;
+            this.pitch = 1;
+            this.volume = 1;
+            this.voice = null;
+        }
+    }
+
     const speechSynthesisStub = {
         speaking: false,
+        pending: false,
+        paused: false,
         speakCalls: [],
         cancelCalls: 0,
+        resumeCalls: 0,
         getVoices() {
             return [{ name: 'Samantha', lang: 'en-US' }];
         },
@@ -93,13 +108,22 @@ export function installSpeechSynthesisStub() {
         },
         cancel() {
             this.cancelCalls += 1;
+            this.speaking = false;
+            this.pending = false;
+            this.paused = false;
+        },
+        resume() {
+            this.resumeCalls += 1;
+            this.paused = false;
         },
         addEventListener() {},
         removeEventListener() {}
     };
 
     window.speechSynthesis = speechSynthesisStub;
+    window.SpeechSynthesisUtterance = FakeSpeechSynthesisUtterance;
     setGlobal('speechSynthesis', speechSynthesisStub);
+    setGlobal('SpeechSynthesisUtterance', FakeSpeechSynthesisUtterance);
     return speechSynthesisStub;
 }
 

@@ -1,13 +1,23 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
+import {
+    getFilenameFromUrl,
+    getViewerSourceUrl,
+    isFileUrl
+} from './viewer-routing.js';
 import { sanitizeMarkdownHtml, rewriteRelativePaths } from './markdown-helpers.js';
 import { resetCurrentTabBrowserZoom } from './viewer-browser-zoom.js';
 import {
+    applyElementZoom,
     captureElementScrollAnchor,
     createZoomStateParams,
     getExplicitZoomParam,
     getClampedZoomPercent,
     restoreElementScrollAnchor
 } from './viewer-zoom-helpers.js';
+import {
+    setViewerLoading,
+    showViewerError
+} from './viewer-ui.js';
 
 /**
  * Translater Markdown Reader Script
@@ -33,21 +43,15 @@ if (!utils || !interactionController) {
 }
 
 const {
-    escapeHtml,
-    isAllEnglish,
-    isProbablyWord,
-    isContextValid,
-    getTextSelectionAction,
     dismissTranslatorUiOnOutsideEvent,
     dismissTranslatorUiOnFrameBlur,
-    showSelectionToolbar,
     openExternalUrl,
     appendNoRedirectParam
 } = utils;
 
 const {
-    handleSelectionTranslation,
-    handleWordLookupInteraction
+    handleReaderSelectionRelease,
+    handleWordLookupFromSelection
 } = interactionController;
 
 // DOM Elements
@@ -81,14 +85,6 @@ let currentZoom = getClampedZoomPercent(
 
 // ==================== Markdown Loading and Rendering ====================
 
-function getMdUrl() {
-    return new URLSearchParams(window.location.search).get('url');
-}
-
-function isFileUrl(url) {
-    return typeof url === 'string' && url.startsWith('file://');
-}
-
 async function loadMarkdown(url) {
     try {
         showLoading(true);
@@ -106,7 +102,7 @@ async function loadMarkdown(url) {
         rewriteRelativePaths(mdContent, baseUrl);
 
         // Set title
-        const filename = decodeURIComponent(url.split('/').pop().split('?')[0]);
+        const filename = getFilenameFromUrl(url, 'Untitled Markdown');
         mdTitleSpan.textContent = filename;
         document.title = filename;
 
@@ -118,7 +114,7 @@ async function loadMarkdown(url) {
     } catch (error) {
         console.error('Failed to load Markdown:', error);
         let msg = 'Unable to load Markdown file.';
-        if (url.startsWith('file://')) {
+        if (isFileUrl(url)) {
             msg += ' For local files, enable "Allow access to file URLs" in chrome://extensions.';
         }
         showError(msg);
@@ -151,12 +147,7 @@ function buildTableOfContents() {
 
 function updateZoomLevel() {
     zoomLevelSpan.textContent = currentZoom + '%';
-    const scale = currentZoom / 100;
-    mdContent.style.transform = `scale(${scale})`;
-    mdContent.style.transformOrigin = 'top center';
-    // Adjust wrapper height so the scrollable area matches the scaled content
-    const naturalHeight = mdContent.scrollHeight;
-    mdContent.style.marginBottom = `${naturalHeight * (scale - 1)}px`;
+    applyElementZoom(mdContent, currentZoom);
 }
 
 function applyZoom(newZoom) {
@@ -176,7 +167,7 @@ document.getElementById('zoomIn').onclick = () => applyZoom(currentZoom + ZOOM_S
 // ==================== Toolbar ====================
 
 document.getElementById('openOriginal').onclick = () => {
-    const url = getMdUrl();
+    const url = getViewerSourceUrl();
     if (url) {
         openExternalUrl(appendNoRedirectParam(url));
     }
@@ -184,51 +175,19 @@ document.getElementById('openOriginal').onclick = () => {
 
 // ==================== Translation Logic (Shadow DOM) ====================
 
-mdContent.addEventListener('dblclick', async (e) => {
-    if (!isContextValid()) return;
-    const word = window.getSelection().toString().trim();
-    if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
-    await handleWordLookupInteraction({
-        word,
-        x: e.clientX,
-        y: e.clientY
+mdContent.addEventListener('dblclick', (e) => {
+    void handleWordLookupFromSelection(e).catch(error => {
+        console.error('[Translater] Word lookup interaction failed:', error);
     });
 });
 
-mdContent.onmouseup = async (e) => {
-    if (!isContextValid()) return;
-    if (e.detail > 1) return;
-    setTimeout(async () => {
-        try {
-            const text = window.getSelection().toString().trim();
-            const action = getTextSelectionAction(text);
-            if (e.target.id === 'translator-extension-host') return;
-            if (action === 'none') return;
-            if (action === 'word-lookup') {
-                await handleWordLookupInteraction({
-                    word: text,
-                    x: e.clientX,
-                    y: e.clientY
-                });
-                return;
-            }
-            await showSelectionToolbar({
-                text,
-                x: e.clientX,
-                y: e.clientY,
-                minTop: 60,
-                onTranslate: (selectedText, x, y) => handleSelectionTranslation({
-                    text: selectedText,
-                    x,
-                    y,
-                    popupWidth: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
-                    popupHeight: SENTENCE_POPUP_HEIGHT
-                })
-            });
-        } catch (err) {
-            console.error('[Translater] Mouseup error:', err);
-        }
-    }, 50);
+mdContent.onmouseup = (e) => {
+    handleReaderSelectionRelease(e, {
+        getSentencePopupOptions: () => ({
+            popupWidth: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
+            popupHeight: SENTENCE_POPUP_HEIGHT
+        })
+    });
 };
 
 window.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
@@ -238,30 +197,20 @@ window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 // ==================== Loading / Error UI ====================
 
 function showLoading(show) {
-    let overlay = document.querySelector('.loading-overlay');
-    if (show && !overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'loading-overlay';
-        const spinner = document.createElement('div');
-        spinner.className = 'loading-spinner';
-        const text = document.createElement('div');
-        text.className = 'loading-text';
-        text.textContent = 'Loading Markdown...';
-        overlay.appendChild(spinner);
-        overlay.appendChild(text);
-        document.body.appendChild(overlay);
-    } else if (!show && overlay) overlay.remove();
+    setViewerLoading(viewerContainer, show, 'Loading Markdown...');
 }
 
 function showError(message) {
-    showLoading(false);
-    mdContent.innerHTML = `<div class="error-container"><div class="error-icon">📄</div><div class="error-message">${escapeHtml(message)}</div><button class="error-retry-btn" id="retryBtn">Retry</button></div>`;
-    document.getElementById('retryBtn').onclick = () => location.reload();
+    showViewerError({
+        loadingContainer: viewerContainer,
+        contentContainer: mdContent,
+        message
+    });
 }
 
 // ==================== Initialize ====================
 
-const url = getMdUrl();
+const url = getViewerSourceUrl();
 if (url) {
     resetCurrentTabBrowserZoom();
     setupViewerSidebar({

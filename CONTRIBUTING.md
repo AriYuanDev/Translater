@@ -2,53 +2,62 @@
 
 ## Local Setup
 
-1. Clone the repository.
-2. Run `npm install`.
-3. Open `chrome://extensions/`.
-4. Enable **Developer mode**.
-5. Click **Load unpacked** and select `chrome-extension/`.
-6. Open the extension options page and configure local API keys.
+```bash
+npm install
+```
 
-## Validation Expectations
+Chrome extension:
 
-- Run `npm test` for every code change.
-- Use `TEST_TRANSLATION.md` for manual smoke testing when a change affects UI, interaction flow, permissions, storage, PDF handling, or Markdown rendering.
-- If your change affects visible behavior, verify the impacted surface directly in Chrome.
+1. Open `chrome://extensions/`.
+2. Enable Developer mode.
+3. Load unpacked from `chrome-extension/`.
+4. Configure local API keys in the options page.
 
-## Pull Request Expectations
+Android:
 
-- Describe the user-facing behavior you changed.
-- List the validation you performed.
-- Include screenshots or a GIF for UI changes.
-- Call out privacy or security impact when a change touches permissions, storage, network requests, sanitization, or third-party assets.
+1. Open `android-app/` in Android Studio, or use the checked-in Gradle Wrapper.
+2. If needed, copy `android-app/local.properties.example` to `android-app/local.properties` and set `sdk.dir`.
+
+## Before Changing Behavior
+
+Read `docs/PRODUCT.md`.
+
+If user-facing behavior changes, update the relevant behavior contract or explain why the current contract still applies.
+
+## Validation
+
+Use `docs/VALIDATION.md`.
+
+Minimum expectations:
+
+- Chrome code: `npm test`
+- Chrome interaction or viewer behavior: targeted manual smoke checks, and `npm run smoke:playwright` when available
+- Android source: `cd android-app && ./gradlew test`
+- Android packaging or assets: `cd android-app && ./gradlew assembleDebug`
+
+## Pull Requests
+
+Every PR should state:
+
+- User flow affected.
+- Validation performed.
+- Screenshots or recordings for visible UI changes.
+- Permission, storage, network, sanitization, or privacy impact.
 
 ## Commit Style
 
-- Use Conventional Commits when possible.
-- Keep commit scope focused and avoid bundling unrelated cleanup into feature or bug-fix commits.
+Use Conventional Commits when possible:
 
-## Repository Safety Rules
+- `feat(chrome): ...`
+- `fix(pdf): ...`
+- `fix(md): ...`
+- `fix(android): ...`
+- `docs: ...`
 
-- Never commit API keys, tokens, or local-only secrets.
-- Never commit local browser profiles, local config, or generated build artifacts.
-- Preserve existing license headers when updating vendored third-party files.
-- Document the upstream source and version when bumping vendored browser assets.
+Keep commits focused. Do not bundle unrelated cleanup into feature or bug-fix commits.
 
-## Maintainer GitHub Settings
+## Repository Safety
 
-After the repository is pushed to GitHub, the maintainer should enable:
-
-- secret scanning alerts
-- push protection
-- dependency graph
-- Dependabot alerts
-- security updates
-- branch protection on `main`
-
-Branch protection should match the current repository workflow:
-
-- require pull requests before merge
-- require review when collaborators are active
-- require only checks that actually exist for this repository
-
-Do not add required checks for CI workflows that have not been created yet.
+- Never commit API keys, tokens, local browser profiles, or local-only config.
+- Preserve vendored third-party license headers.
+- Document upstream source and version when bumping vendored browser assets.

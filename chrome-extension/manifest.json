@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Translater - Smart Translation Assistant",
-  "version": "1.5.0",
+  "version": "1.5.5",
   "description": "Double-click for dictionary, select for translation with DeepL support, PDF reader and Markdown reader integration.",
   "permissions": [
     "activeTab",
     "webNavigation",
-    "storage"
+    "storage",
+    "tts"
   ],
   "host_permissions": [
     "https://dictionary.cambridge.org/*",
@@ -58,11 +59,14 @@
         "mdviewer.js",
         "mdviewer.css",
         "viewer-toolbar.css",
+        "viewer-shared.css",
         "viewer-browser-zoom.js",
+        "viewer-initial-state.js",
         "viewer-zoom-helpers.js",
         "viewer-sidebar.js",
         "viewer-routing.js",
         "viewer-sidebar-helpers.js",
+        "viewer-ui.js",
         "pdf-canvas-factory.js",
         "markdown-helpers.js",
         "interaction-controller.js",

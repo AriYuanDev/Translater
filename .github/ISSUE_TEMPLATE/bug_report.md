@@ -33,7 +33,7 @@ What happened instead?
 ## Validation Notes
 
 - [ ] `npm test` run when relevant
-- [ ] Manual smoke test run when relevant
+- [ ] Manual smoke test from `docs/VALIDATION.md` run when relevant
 - [ ] Screenshots, logs, or recordings attached when helpful
 
 ## Additional Context

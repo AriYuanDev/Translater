@@ -1,4 +1,9 @@
-import { getViewerType, isSupportedViewerDocument } from './viewer-routing.js';
+import {
+    getFilenameFromUrl,
+    getViewerType,
+    isFileUrl,
+    isSupportedViewerDocument
+} from './viewer-routing.js';
 
 const DOCUMENT_NAME_REGEX = /[^<>:"/\\|?*\r\n\t]+?\.(?:pdf|md|markdown)\b/gi;
 const CHROME_FILE_ROW_REGEX = /addRow\(\s*("(?:\\.|[^"\\])*")\s*,\s*("(?:\\.|[^"\\])*")\s*,\s*(true|false|0|1)\b/gi;
@@ -20,14 +25,7 @@ export function safeDecodeURIComponent(value) {
 }
 
 export function getDocumentName(url) {
-    try {
-        const pathname = new URL(url).pathname;
-        const filename = pathname.split('/').pop();
-        return safeDecodeURIComponent(filename || 'Untitled');
-    } catch {
-        const filename = String(url || '').split('/').pop()?.split('?')[0] || 'Untitled';
-        return safeDecodeURIComponent(filename);
-    }
+    return getFilenameFromUrl(url, 'Untitled');
 }
 
 export function getDirectoryUrl(url) {
@@ -276,7 +274,7 @@ export function parseDirectoryItems(
         addItemFromCandidate(items, candidate, directoryUrl);
     });
 
-    if (directoryUrl.startsWith('file://') && countDocumentItems(items) <= 1 && nodeFilter) {
+    if (isFileUrl(directoryUrl) && countDocumentItems(items) <= 1 && nodeFilter) {
         const documents = new Map();
         extractTextCandidates(doc, nodeFilter).forEach(candidate => {
             addDocumentFromCandidate(documents, candidate, directoryUrl);

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    handleReaderSelectionRelease,
     handleSelectionTranslation,
+    handleWordLookupFromSelection,
     handleWordLookupInteraction
 } from '../chrome-extension/interaction-controller.js';
 import {
@@ -78,10 +80,506 @@ test('handleWordLookupInteraction renders loading state and then dictionary resu
     assert.match(getShadowText(), /noun/);
 });
 
+test('handleWordLookupInteraction does not auto-translate definitions and translates one definition on click', async () => {
+    let translateCalls = 0;
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        if (message.action === 'translate') {
+            translateCalls += 1;
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.equal(translateCalls, 0);
+    assert.match(getShadowText(), /support definition/);
+    assert.doesNotMatch(getShadowText(), /支持释义/);
+
+    const translateButton = getShadowRoot().querySelector('.translator-translate-definition-btn');
+    assert.ok(translateButton);
+    translateButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.equal(translateCalls, 1);
+    assert.match(getShadowText(), /支持释义/);
+});
+
+test('handleWordLookupInteraction can request speech before fetching dictionary data', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'speakText') {
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180,
+        speakOnOpen: true
+    });
+
+    assert.deepEqual(messages.slice(0, 2), [
+        {
+            action: 'speakText',
+            text: 'support',
+            options: {}
+        },
+        {
+            action: 'fetchDictionary',
+            word: 'support'
+        }
+    ]);
+});
+
+test('handleWordLookupFromSelection validates selected words and speaks before lookup', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'speakText') {
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    const handled = await handleWordLookupFromSelection(
+        new window.MouseEvent('dblclick', { clientX: 120, clientY: 180 }),
+        {
+            getSelectionText: () => 'support',
+            speakOnOpen: true
+        }
+    );
+
+    assert.equal(handled, true);
+    assert.deepEqual(messages.slice(0, 2), [
+        {
+            action: 'speakText',
+            text: 'support',
+            options: {}
+        },
+        {
+            action: 'fetchDictionary',
+            word: 'support'
+        }
+    ]);
+});
+
+test('handleReaderSelectionRelease routes words and sentence selections through shared reader handling', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult(message.word) };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '敏捷的棕色狐狸' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    const wordHandled = handleReaderSelectionRelease(
+        new window.MouseEvent('mouseup', { clientX: 120, clientY: 180, detail: 1 }),
+        {
+            getSelectionText: () => 'support',
+            getWordPopupOptions: () => ({ popupWidth: 640, popupHeight: 220 }),
+            delayMs: 0
+        }
+    );
+    assert.equal(wordHandled, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(messages.at(-1), {
+        action: 'fetchDictionary',
+        word: 'support'
+    });
+
+    const sentenceHandled = handleReaderSelectionRelease(
+        new window.MouseEvent('mouseup', { clientX: 160, clientY: 200, detail: 1 }),
+        {
+            getSelectionText: () => 'The quick brown fox',
+            getSentencePopupOptions: () => ({ popupWidth: 300, popupHeight: 140 }),
+            translateTriggerMode: 'click',
+            delayMs: 0
+        }
+    );
+    assert.equal(sentenceHandled, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const translateButton = getShadowRoot().querySelector('.translator-float-btn.translate-btn');
+    assert.ok(translateButton);
+    translateButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(messages.at(-1), {
+        action: 'translate',
+        text: 'The quick brown fox'
+    });
+    assert.match(getShadowText(), /敏捷的棕色狐狸/);
+});
+
+test('handleWordLookupInteraction waits for a speaker click before playing dictionary audio', async () => {
+    const AudioStub = installAudioStub();
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('support'),
+                    phonetics: [{ audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/s/support.mp3' }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.deepEqual(AudioStub.playCalls, []);
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, [
+        'https://media.merriam-webster.com/audio/prons/en/us/mp3/s/support.mp3'
+    ]);
+});
+
+test('handleWordLookupInteraction speaks the selected form when morphed data only has headword audio', async () => {
+    const AudioStub = installAudioStub();
+    const speechSynthesisStub = installSpeechSynthesisStub();
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('extreme'),
+                    phonetics: [{
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extrem01.mp3',
+                        source: 'headword',
+                        sourceWord: 'extreme'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        if (message.action === 'speakText') {
+            return { success: false };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'extremes',
+        x: 120,
+        y: 180
+    });
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, []);
+    assert.equal(speechSynthesisStub.speakCalls.at(-1).text, 'extremes');
+});
+
+test('handleWordLookupInteraction falls back to headword audio when selected-form TTS is unavailable', async () => {
+    const AudioStub = installAudioStub();
+    delete globalThis.speechSynthesis;
+    delete globalThis.SpeechSynthesisUtterance;
+    Object.defineProperty(window, 'speechSynthesis', {
+        value: undefined,
+        configurable: true
+    });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+        value: undefined,
+        configurable: true
+    });
+
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('extreme'),
+                    phonetics: [{
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extrem01.mp3',
+                        source: 'headword',
+                        sourceWord: 'extreme'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        if (message.action === 'speakText') {
+            return { success: false, errorCode: 'TTS_UNAVAILABLE' };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'extremes',
+        x: 120,
+        y: 180
+    });
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, [
+        'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extrem01.mp3'
+    ]);
+});
+
+test('handleWordLookupInteraction treats derived inflection audio as headword audio', async () => {
+    const AudioStub = installAudioStub();
+    const speechSynthesisStub = installSpeechSynthesisStub();
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('prolonged'),
+                    phonetics: [{
+                        text: '/prəˈlɔːŋd/',
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/p/prolon01.mp3',
+                        source: 'derived-inflection',
+                        sourceWord: 'prolonged',
+                        audioSourceWord: 'prolong'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        if (message.action === 'speakText') {
+            return { success: false };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'prolonged',
+        x: 120,
+        y: 180
+    });
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, []);
+    assert.equal(speechSynthesisStub.speakCalls.at(-1).text, 'prolonged');
+});
+
+test('handleWordLookupInteraction labels IPA and audio source ownership', async () => {
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('prolonged'),
+                    phonetic: '/prəˈlɔːŋd/',
+                    phonetics: [{
+                        text: '/prəˈlɔːŋd/',
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/p/prolon01.mp3',
+                        source: 'derived-inflection',
+                        sourceWord: 'prolonged',
+                        audioSourceWord: 'prolong'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'prolonged',
+        x: 120,
+        y: 180
+    });
+
+    const ownership = getShadowRoot().querySelector('.translator-pronunciation-ownership');
+    assert.ok(ownership);
+    assert.match(ownership.textContent, /IPA shown:\s*prolonged\s*\(inferred\)/);
+    assert.match(ownership.textContent, /Audio file:\s*prolong/);
+    assert.match(ownership.textContent, /Button plays:\s*prolonged\s*\(TTS first\)/);
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.equal(speakButton.getAttribute('title'), 'Play: prolonged via TTS; fallback audio file: prolong');
+});
+
+test('handleWordLookupInteraction keeps selected inflection as the header word', async () => {
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('year'),
+                    phonetic: '/ˈjiə/',
+                    phonetics: [{
+                        text: '/ˈjiə/',
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/y/year0001.mp3',
+                        source: 'headword',
+                        sourceWord: 'year'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'years',
+        x: 120,
+        y: 180
+    });
+
+    assert.equal(getShadowRoot().querySelector('.translator-word')?.textContent, 'years');
+    assert.match(getShadowRoot().querySelector('.translator-entry-word')?.textContent || '', /Dictionary entry:\s*year/);
+    assert.doesNotMatch(getShadowText(), /\(from years\)/);
+
+    const ownership = getShadowRoot().querySelector('.translator-pronunciation-ownership');
+    assert.ok(ownership);
+    assert.match(ownership.textContent, /IPA shown:\s*year/);
+    assert.match(ownership.textContent, /Audio file:\s*year/);
+    assert.match(ownership.textContent, /Button plays:\s*years\s*\(TTS first\)/);
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.equal(speakButton.getAttribute('title'), 'Play: years via TTS; fallback audio file: year');
+});
+
+test('handleWordLookupInteraction plays dictionary audio when it belongs to the selected inflection', async () => {
+    const AudioStub = installAudioStub();
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    ...buildDictionaryResult('extreme'),
+                    phonetics: [{
+                        audio: 'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extremes01.mp3',
+                        source: 'inflection',
+                        sourceWord: 'extremes'
+                    }]
+                }
+            };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'extremes',
+        x: 120,
+        y: 180
+    });
+
+    const speakButton = getShadowRoot().querySelector('.translator-speak-btn');
+    assert.ok(speakButton);
+    speakButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(AudioStub.playCalls, [
+        'https://media.merriam-webster.com/audio/prons/en/us/mp3/e/extremes01.mp3'
+    ]);
+});
+
+test('handleSelectionTranslation surfaces long text guard errors without generic copy', async () => {
+    installChromeStub(message => {
+        if (message.action === 'translate') {
+            return {
+                success: false,
+                errorCode: 'TEXT_TOO_LONG',
+                error: 'Selected text exceeds 500 characters. Please shorten the selection.'
+            };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleSelectionTranslation({
+        text: 'a'.repeat(501),
+        x: 220,
+        y: 180
+    });
+
+    assert.match(getShadowText(), /500 characters/);
+    assert.ok(getShadowRoot().querySelector('.translator-sentence-content .translator-error'));
+});
+
 test('handleWordLookupInteraction falls back to translation when dictionary returns no data', async () => {
     installChromeStub(message => {
         if (message.action === 'fetchDictionary') {
             return { success: true, data: null };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180
+    });
+
+    assert.match(getShadowText(), /支持/);
+});
+
+test('handleWordLookupInteraction falls back to translation when dictionary data has no definitions', async () => {
+    installChromeStub(message => {
+        if (message.action === 'fetchDictionary') {
+            return {
+                success: true,
+                data: {
+                    word: 'support',
+                    meanings: [{ partOfSpeech: 'noun' }]
+                }
+            };
         }
         if (message.action === 'translate') {
             return { success: true, data: { translated: '支持' } };
@@ -192,4 +690,5 @@ test('handleSelectionTranslation shows an error when translation fails', async (
     });
 
     assert.match(getShadowText(), /Translation unavailable/);
+    assert.ok(getShadowRoot().querySelector('.translator-sentence-content .translator-error'));
 });

@@ -1,6 +1,9 @@
 # CLAUDE.md
 
-This repository now contains a single actively maintained surface: the Chrome extension in `chrome-extension/`.
+This repository contains two actively maintained surfaces:
+
+- Chrome extension in `chrome-extension/`
+- Android Markdown reader app in `android-app/`
 
 ## Project Overview
 
@@ -10,14 +13,23 @@ Translater provides:
 - sentence translation through a floating toolbar
 - text-to-speech
 - custom PDF and Markdown readers with the same translation workflow
+- Android Markdown reading, word lookup, and offline pronunciation fallback
+
+## Project Docs
+
+- `docs/PRODUCT.md` — product goals, priorities, and behavior contracts.
+- `docs/ARCHITECTURE.md` — module map and implementation boundaries.
+- `docs/VALIDATION.md` — test commands and smoke checks.
 
 ## Key Files
 
-- `chrome-extension/background.js` — API orchestration, caching, and PDF/Markdown URL redirection.
+- `chrome-extension/background.js` — API orchestration, caching, TTS, and PDF/Markdown URL redirection.
 - `chrome-extension/content.js` — page translation interactions.
 - `chrome-extension/pdfviewer.js` — PDF reader built on PDF.js.
 - `chrome-extension/mdviewer.js` — Markdown reader built on marked.js.
 - `chrome-extension/utils.js` — shared popup, toolbar, TTS, URL, and translation helpers.
+- `android-app/app/src/main/java/com/translater/android/` — Android app source.
+- `android-app/app/src/main/assets/vits-piper-en_US-amy-low/` — bundled offline pronunciation model.
 
 ## Development Notes
 
@@ -29,5 +41,7 @@ Translater provides:
 
 ## Validation
 
-There is no automated test pipeline at the repo root anymore.
-Use `TEST_TRANSLATION.md` for manual smoke tests in Chrome.
+- Run `npm test` for the Chrome extension shared test suite.
+- Run `npm run smoke:playwright` for the Chrome extension browser smoke pass when interaction surfaces change.
+- Run `cd android-app && ./gradlew test` for Android unit tests when Android code changes.
+- Use `docs/VALIDATION.md` for manual smoke tests on the affected surface.

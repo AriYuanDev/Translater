@@ -4,7 +4,10 @@ import assert from 'node:assert/strict';
 import {
     createViewerPageUrl,
     createViewerUrlForDocument,
+    getFilenameFromUrl,
+    getViewerSourceUrl,
     hasViewerBypass,
+    isFileUrl,
     isMdUrl,
     isPdfUrl
 } from '../chrome-extension/viewer-routing.js';
@@ -54,4 +57,21 @@ test('viewer URL helpers preserve viewer state parameters after source URL', () 
         createViewerUrlForDocument(sourceUrl, runtimeUrlResolver, { zoom: 175 }),
         'chrome-extension://test/pdfviewer.html?url=' + encodeURIComponent(sourceUrl) + '&zoom=175'
     );
+});
+
+test('viewer source URL helper reads the encoded source document URL', () => {
+    const sourceUrl = 'file:///Users/example/docs/readme.md';
+    const search = '?url=' + encodeURIComponent(sourceUrl) + '&zoom=140';
+
+    assert.equal(getViewerSourceUrl(search), sourceUrl);
+    assert.equal(getViewerSourceUrl('?zoom=140'), null);
+});
+
+test('file URL and filename helpers handle viewer documents consistently', () => {
+    assert.equal(isFileUrl('file:///Users/example/report.pdf'), true);
+    assert.equal(isFileUrl('https://example.com/report.pdf'), false);
+
+    assert.equal(getFilenameFromUrl('https://example.com/docs/Report%202026.pdf?download=1'), 'Report 2026.pdf');
+    assert.equal(getFilenameFromUrl('not a url/path/README.md?raw=1'), 'README.md');
+    assert.equal(getFilenameFromUrl(''), 'Untitled');
 });

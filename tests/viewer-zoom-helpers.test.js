@@ -2,12 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    applyElementZoom,
     captureElementScrollAnchor,
     createZoomStateParams,
     getExplicitZoomParam,
     getClampedZoomPercent,
     restoreElementScrollAnchor
 } from '../chrome-extension/viewer-zoom-helpers.js';
+
+test('applyElementZoom uses layout zoom instead of transform scaling', () => {
+    const element = {
+        style: {
+            zoom: '',
+            transform: 'scale(1.5)',
+            transformOrigin: 'top center',
+            marginBottom: '500px'
+        }
+    };
+
+    applyElementZoom(element, 150);
+
+    assert.equal(element.style.zoom, '1.5');
+    assert.equal(element.style.transform, '');
+    assert.equal(element.style.transformOrigin, '');
+    assert.equal(element.style.marginBottom, '');
+});
 
 test('getClampedZoomPercent parses query values and clamps to viewer limits', () => {
     assert.equal(getClampedZoomPercent('175', 100, 60, 200), 175);

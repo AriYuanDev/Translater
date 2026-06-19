@@ -1,4 +1,9 @@
 import { setupViewerSidebar } from './viewer-sidebar.js';
+import {
+    getFilenameFromUrl,
+    getViewerSourceUrl,
+    isFileUrl
+} from './viewer-routing.js';
 import { resetCurrentTabBrowserZoom } from './viewer-browser-zoom.js';
 import {
     createZoomStateParams,
@@ -9,6 +14,10 @@ import {
     ReadbackOptimizedCanvasFactory,
     getReadbackOptimizedCanvasContext
 } from './pdf-canvas-factory.js';
+import {
+    setViewerLoading,
+    showViewerError
+} from './viewer-ui.js';
 
 /**
  * Translater PDF Reader Script
@@ -34,20 +43,14 @@ if (!utils || !interactionController) {
 }
 
 const {
-    escapeHtml,
-    isAllEnglish,
-    isProbablyWord,
-    isContextValid,
-    getTextSelectionAction,
     dismissTranslatorUiOnOutsideEvent,
     dismissTranslatorUiOnFrameBlur,
-    showSelectionToolbar,
     openExternalUrl
 } = utils;
 
 const {
-    handleSelectionTranslation,
-    handleWordLookupInteraction
+    handleReaderSelectionRelease,
+    handleWordLookupFromSelection
 } = interactionController;
 
 // PDF.js configuration
@@ -341,24 +344,6 @@ async function applyScale(newScale) {
 
 // ==================== PDF Loading and Rendering ====================
 
-function getPdfUrl() {
-    return new URLSearchParams(window.location.search).get('url');
-}
-
-function isFileUrl(url) {
-    return typeof url === 'string' && url.startsWith('file://');
-}
-
-function getPdfFilename(url) {
-    try {
-        const pathname = new URL(url).pathname;
-        const filename = pathname.split('/').pop();
-        return decodeURIComponent(filename || 'Untitled PDF');
-    } catch {
-        return decodeURIComponent(url.split('/').pop().split('?')[0]);
-    }
-}
-
 async function fetchPdfData(url) {
     const response = await fetch(url);
     const isReadableFileResponse = isFileUrl(url) && response.status === 0;
@@ -411,7 +396,7 @@ async function loadPdf(url) {
         pdfDoc = await loadingTask.promise;
         totalPagesSpan.textContent = pdfDoc.numPages;
         setCurrentPageNumber(1);
-        const filename = getPdfFilename(url);
+        const filename = getFilenameFromUrl(url, 'Untitled PDF');
         pdfTitleSpan.textContent = filename;
         document.title = filename;
 
@@ -564,8 +549,13 @@ document.getElementById('fitWidth').onclick = async () => {
     await applyScale(fitScale);
 };
 document.getElementById('downloadPdf').onclick = () => {
-    const url = getPdfUrl();
-    if (url) { const a = document.createElement('a'); a.href = url; a.download = decodeURIComponent(url.split('/').pop().split('?')[0]); a.click(); }
+    const url = getViewerSourceUrl();
+    if (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = getFilenameFromUrl(url, 'document.pdf');
+        a.click();
+    }
 };
 function scrollToPage(pageNum) {
     const container = renderedPages.get(pageNum);
@@ -640,55 +630,28 @@ updatePageNavigationButtons();
  * Handles the double-click event to show the dictionary popup for a word.
  * @param {MouseEvent} e
  */
-viewer.addEventListener('dblclick', async (e) => {
-    if (!isContextValid()) return;
-    const word = window.getSelection().toString().trim();
-    if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
-    await handleWordLookupInteraction({
-        word,
-        x: e.clientX,
-        y: e.clientY,
-        popupWidth: Math.min(POPUP_WIDTH, window.innerWidth - 20),
-        popupHeight: POPUP_HEIGHT
+viewer.addEventListener('dblclick', (e) => {
+    void handleWordLookupFromSelection(e, {
+        getWordPopupOptions: () => ({
+            popupWidth: Math.min(POPUP_WIDTH, window.innerWidth - 20),
+            popupHeight: POPUP_HEIGHT
+        })
+    }).catch(error => {
+        console.error('[Translater] Word lookup interaction failed:', error);
     });
 });
 
-viewer.onmouseup = async (e) => {
-    if (!isContextValid()) return;
-    if (e.detail > 1) return;
-    setTimeout(async () => {
-        try {
-            const text = window.getSelection().toString().trim();
-            const action = getTextSelectionAction(text);
-            if (e.target.id === 'translator-extension-host') return;
-            if (action === 'none') return;
-            if (action === 'word-lookup') {
-                await handleWordLookupInteraction({
-                    word: text,
-                    x: e.clientX,
-                    y: e.clientY,
-                    popupWidth: Math.min(POPUP_WIDTH, window.innerWidth - 20),
-                    popupHeight: POPUP_HEIGHT
-                });
-                return;
-            }
-            await showSelectionToolbar({
-                text,
-                x: e.clientX,
-                y: e.clientY,
-                minTop: 60,
-                onTranslate: (selectedText, x, y) => handleSelectionTranslation({
-                    text: selectedText,
-                    x,
-                    y,
-                    popupWidth: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
-                    popupHeight: SENTENCE_POPUP_HEIGHT
-                })
-            });
-        } catch (err) {
-            console.error('[Translater] Mouseup error:', err);
-        }
-    }, 50);
+viewer.onmouseup = (e) => {
+    handleReaderSelectionRelease(e, {
+        getWordPopupOptions: () => ({
+            popupWidth: Math.min(POPUP_WIDTH, window.innerWidth - 20),
+            popupHeight: POPUP_HEIGHT
+        }),
+        getSentencePopupOptions: () => ({
+            popupWidth: Math.min(SENTENCE_POPUP_WIDTH, window.innerWidth - 20),
+            popupHeight: SENTENCE_POPUP_HEIGHT
+        })
+    });
 };
 
 window.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
@@ -696,28 +659,18 @@ document.addEventListener('mousedown', dismissTranslatorUiOnOutsideEvent, true);
 window.addEventListener('blur', dismissTranslatorUiOnFrameBlur);
 
 function showLoading(show) {
-    let overlay = document.querySelector('.loading-overlay');
-    if (show && !overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'loading-overlay';
-        const spinner = document.createElement('div');
-        spinner.className = 'loading-spinner';
-        const text = document.createElement('div');
-        text.className = 'loading-text';
-        text.textContent = 'Loading PDF...';
-        overlay.appendChild(spinner);
-        overlay.appendChild(text);
-        document.body.appendChild(overlay);
-    } else if (!show && overlay) overlay.remove();
+    setViewerLoading(viewerContainer, show, 'Loading PDF...');
 }
 
 function showError(message) {
-    showLoading(false);
-    viewer.innerHTML = `<div class="error-container"><div class="error-icon">📄</div><div class="error-message">${escapeHtml(message)}</div><button class="error-retry-btn" id="retryBtn">Retry</button></div>`;
-    document.getElementById('retryBtn').onclick = () => location.reload();
+    showViewerError({
+        loadingContainer: viewerContainer,
+        contentContainer: viewer,
+        message
+    });
 }
 
-const url = getPdfUrl();
+const url = getViewerSourceUrl();
 if (url) {
     resetCurrentTabBrowserZoom();
     setupViewerSidebar({

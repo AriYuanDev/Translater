@@ -39,6 +39,18 @@ export function getExplicitZoomParam(searchParams) {
     return params.get('zoom');
 }
 
+export function applyElementZoom(contentElement, zoomPercent) {
+    if (!contentElement) return;
+
+    const zoom = Number(zoomPercent);
+    if (!Number.isFinite(zoom) || zoom <= 0) return;
+
+    contentElement.style.zoom = String(zoom / 100);
+    contentElement.style.transform = '';
+    contentElement.style.transformOrigin = '';
+    contentElement.style.marginBottom = '';
+}
+
 export function captureElementScrollAnchor(scrollContainer, contentElement) {
     if (!scrollContainer || !contentElement) return null;
 

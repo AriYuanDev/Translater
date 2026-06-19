@@ -25,19 +25,19 @@
     }
 
     const {
-        isAllEnglish,
         isContextValid,
-        isProbablyWord,
         getFreshSelectionText,
         getTextSelectionAction,
         shouldHandleMouseSelectionRelease,
         dismissTranslatorUiOnOutsideEvent,
         dismissTranslatorUiOnFrameBlur,
-        showSelectionToolbar
+        showSelectionToolbar,
+        preloadSpeechVoices
     } = utils;
 
     const {
         handleSelectionTranslation,
+        handleWordLookupFromSelection,
         handleWordLookupInteraction
     } = interactionController;
 
@@ -103,12 +103,8 @@
         }, delayMs);
     }
 
-    // Preload speech engine
-    if (typeof speechSynthesis !== 'undefined') {
-        speechSynthesis.getVoices();
-        speechSynthesis.addEventListener('voiceschanged', () => {
-            console.log('[Translater] Speech engine ready');
-        }, { once: true });
+    if (preloadSpeechVoices()) {
+        console.log('[Translater] Speech engine ready');
     }
 
     // ==================== Shadow DOM Setup ====================
@@ -117,17 +113,9 @@
 
     // ==================== Event Listeners ====================
 
-    document.addEventListener('dblclick', async (e) => {
-        if (!isContextValid()) return;
-        const selection = window.getSelection();
-        const word = selection.toString().trim();
-
-        if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
-
-        await handleWordLookupInteraction({
-            word,
-            x: e.clientX,
-            y: e.clientY
+    document.addEventListener('dblclick', (e) => {
+        void handleWordLookupFromSelection(e).catch(error => {
+            console.error('[Translater] Word lookup interaction failed:', error);
         });
     });
 
