@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showStatus('Save failed: ' + error.message, 'warning');
         } finally {
-            saveBtn.textContent = 'Save Key';
+            saveBtn.textContent = 'Save key';
             saveBtn.disabled = false;
         }
     });
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showMWStatus('Save failed: ' + error.message, 'warning');
         } finally {
-            saveMWBtn.textContent = 'Save Key';
+            saveMWBtn.textContent = 'Save key';
             saveMWBtn.disabled = false;
         }
     });
