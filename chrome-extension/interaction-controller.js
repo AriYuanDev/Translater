@@ -2,7 +2,10 @@ import {
     calculatePopupPosition,
     sendMessageSafe,
     speakText,
+    isAllEnglish,
     isContextValid,
+    isProbablyWord,
+    getTextSelectionAction,
     ensureShadowRoot,
     createCloseButton,
     createSpeakButton,
@@ -11,6 +14,7 @@ import {
     setCurrentPopup,
     findBestAudioUrl,
     createDefinitionPair,
+    showSelectionToolbar,
     showSentencePopup
 } from './utils.js';
 
@@ -350,14 +354,32 @@ async function playLookupAudio(data, word, bestAudioUrl = findBestAudioUrl(data?
     }
 }
 
+function getCurrentSelectionText() {
+    return window.getSelection()?.toString().trim() || '';
+}
+
+function resolveInteractionOptions(options, ...args) {
+    if (typeof options === 'function') {
+        return options(...args) || {};
+    }
+    return options || {};
+}
+
 export async function handleWordLookupInteraction({
     word,
     x,
     y,
     popupWidth = Math.min(760, window.innerWidth - 20),
-    popupHeight = 260
+    popupHeight = 260,
+    speakOnOpen = false
 }) {
     if (!isContextValid() || !word) return null;
+
+    if (speakOnOpen) {
+        void speakText(word).catch(error => {
+            console.warn('[Translater] Speak failed:', error);
+        });
+    }
 
     const root = await ensureShadowRoot();
     if (!root) return null;
@@ -399,6 +421,76 @@ export async function handleWordLookupInteraction({
     }
 
     return popup;
+}
+
+export async function handleWordLookupFromSelection(event, options = {}) {
+    if (!isContextValid()) return false;
+
+    const {
+        getSelectionText = getCurrentSelectionText,
+        getWordPopupOptions = {},
+        speakOnOpen = true
+    } = options;
+    const word = getSelectionText(event).trim();
+    if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return false;
+
+    await handleWordLookupInteraction({
+        word,
+        x: event.clientX,
+        y: event.clientY,
+        ...resolveInteractionOptions(getWordPopupOptions, event, word),
+        speakOnOpen
+    });
+    return true;
+}
+
+export function handleReaderSelectionRelease(event, options = {}) {
+    if (!isContextValid()) return false;
+    if (event.detail > 1) return false;
+
+    const {
+        getSelectionText = getCurrentSelectionText,
+        getWordPopupOptions = {},
+        getSentencePopupOptions = {},
+        minTop = 60,
+        delayMs = 50,
+        translateTriggerMode
+    } = options;
+
+    setTimeout(async () => {
+        try {
+            const text = getSelectionText(event).trim();
+            const action = getTextSelectionAction(text);
+            if (event.target?.id === 'translator-extension-host') return;
+            if (action === 'none') return;
+            if (action === 'word-lookup') {
+                await handleWordLookupInteraction({
+                    word: text,
+                    x: event.clientX,
+                    y: event.clientY,
+                    ...resolveInteractionOptions(getWordPopupOptions, event, text)
+                });
+                return;
+            }
+            await showSelectionToolbar({
+                text,
+                x: event.clientX,
+                y: event.clientY,
+                minTop,
+                translateTriggerMode,
+                onTranslate: (selectedText, x, y) => handleSelectionTranslation({
+                    text: selectedText,
+                    x,
+                    y,
+                    ...resolveInteractionOptions(getSentencePopupOptions, event, selectedText)
+                })
+            });
+        } catch (err) {
+            console.error('[Translater] Selection interaction failed:', err);
+        }
+    }, delayMs);
+
+    return true;
 }
 
 export async function handleSelectionTranslation({

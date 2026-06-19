@@ -1,4 +1,4 @@
-import { createViewerUrlForDocument } from './viewer-routing.js';
+import { createViewerUrlForDocument, isFileUrl } from './viewer-routing.js';
 import {
     createDocumentEntry,
     getDirectoryLabel,
@@ -18,7 +18,7 @@ async function loadDirectoryDocuments(currentUrl, targetDirectoryUrl = getDirect
     }
 
     const response = await fetch(directoryUrl);
-    const isReadableFileResponse = directoryUrl.startsWith('file://') && response.status === 0;
+    const isReadableFileResponse = isFileUrl(directoryUrl) && response.status === 0;
     if (!response.ok && !isReadableFileResponse) {
         throw new Error(`HTTP ${response.status}`);
     }
@@ -178,7 +178,7 @@ function renderCurrentDocumentFallback(container, currentUrl, options = {}) {
 }
 
 function getLoadErrorMessage(currentUrl, error) {
-    if (String(currentUrl || '').startsWith('file://')) {
+    if (isFileUrl(currentUrl)) {
         return 'Unable to read this folder. Enable “Allow access to file URLs” for the extension first.';
     }
 

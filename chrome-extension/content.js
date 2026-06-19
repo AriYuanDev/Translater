@@ -25,21 +25,19 @@
     }
 
     const {
-        isAllEnglish,
         isContextValid,
-        isProbablyWord,
         getFreshSelectionText,
         getTextSelectionAction,
         shouldHandleMouseSelectionRelease,
         dismissTranslatorUiOnOutsideEvent,
         dismissTranslatorUiOnFrameBlur,
         showSelectionToolbar,
-        speakText,
         preloadSpeechVoices
     } = utils;
 
     const {
         handleSelectionTranslation,
+        handleWordLookupFromSelection,
         handleWordLookupInteraction
     } = interactionController;
 
@@ -115,21 +113,9 @@
 
     // ==================== Event Listeners ====================
 
-    document.addEventListener('dblclick', async (e) => {
-        if (!isContextValid()) return;
-        const selection = window.getSelection();
-        const word = selection.toString().trim();
-
-        if (!word || !isAllEnglish(word) || !isProbablyWord(word)) return;
-
-        void speakText(word).catch(error => {
-            console.warn('[Translater] Speak failed:', error);
-        });
-
-        await handleWordLookupInteraction({
-            word,
-            x: e.clientX,
-            y: e.clientY
+    document.addEventListener('dblclick', (e) => {
+        void handleWordLookupFromSelection(e).catch(error => {
+            console.error('[Translater] Word lookup interaction failed:', error);
         });
     });
 

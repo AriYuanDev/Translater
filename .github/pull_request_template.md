@@ -6,8 +6,9 @@
 ## Validation
 
 - [ ] `npm test`
-- [ ] Manual smoke testing via `TEST_TRANSLATION.md` when needed
+- [ ] Manual smoke testing via `docs/VALIDATION.md` when needed
 - [ ] Screenshots or GIF attached for UI changes
+- [ ] Behavior contract in `docs/PRODUCT.md` checked when user-facing behavior changed
 
 ## Risk Notes
 

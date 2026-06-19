@@ -21,6 +21,35 @@ export function getViewerType(url) {
     return VIEWER_TYPES[extension] || null;
 }
 
+export function getViewerSourceUrl(search = globalThis.window?.location?.search || '') {
+    return new URLSearchParams(search).get('url');
+}
+
+export function isFileUrl(url) {
+    return typeof url === 'string' && url.startsWith('file://');
+}
+
+function decodeFilename(value, fallback) {
+    const filename = String(value || '').split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!filename) return fallback;
+
+    try {
+        return decodeURIComponent(filename) || fallback;
+    } catch {
+        return filename;
+    }
+}
+
+export function getFilenameFromUrl(url, fallback = 'Untitled') {
+    if (!url) return fallback;
+
+    try {
+        return decodeFilename(new URL(url).pathname, fallback);
+    } catch {
+        return decodeFilename(url, fallback);
+    }
+}
+
 export function isSupportedViewerDocument(url) {
     return !!getViewerType(url);
 }

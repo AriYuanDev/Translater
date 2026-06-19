@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    handleReaderSelectionRelease,
     handleSelectionTranslation,
+    handleWordLookupFromSelection,
     handleWordLookupInteraction
 } from '../chrome-extension/interaction-controller.js';
 import {
@@ -108,6 +110,129 @@ test('handleWordLookupInteraction does not auto-translate definitions and transl
 
     assert.equal(translateCalls, 1);
     assert.match(getShadowText(), /支持释义/);
+});
+
+test('handleWordLookupInteraction can request speech before fetching dictionary data', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'speakText') {
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '支持释义' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    await handleWordLookupInteraction({
+        word: 'support',
+        x: 120,
+        y: 180,
+        speakOnOpen: true
+    });
+
+    assert.deepEqual(messages.slice(0, 2), [
+        {
+            action: 'speakText',
+            text: 'support',
+            options: {}
+        },
+        {
+            action: 'fetchDictionary',
+            word: 'support'
+        }
+    ]);
+});
+
+test('handleWordLookupFromSelection validates selected words and speaks before lookup', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'speakText') {
+            return { success: true, data: { spoken: true, provider: 'chrome.tts' } };
+        }
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult('support') };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    const handled = await handleWordLookupFromSelection(
+        new window.MouseEvent('dblclick', { clientX: 120, clientY: 180 }),
+        {
+            getSelectionText: () => 'support',
+            speakOnOpen: true
+        }
+    );
+
+    assert.equal(handled, true);
+    assert.deepEqual(messages.slice(0, 2), [
+        {
+            action: 'speakText',
+            text: 'support',
+            options: {}
+        },
+        {
+            action: 'fetchDictionary',
+            word: 'support'
+        }
+    ]);
+});
+
+test('handleReaderSelectionRelease routes words and sentence selections through shared reader handling', async () => {
+    const messages = [];
+    installChromeStub(message => {
+        messages.push(message);
+        if (message.action === 'fetchDictionary') {
+            return { success: true, data: buildDictionaryResult(message.word) };
+        }
+        if (message.action === 'translate') {
+            return { success: true, data: { translated: '敏捷的棕色狐狸' } };
+        }
+        throw new Error(`Unexpected action ${message.action}`);
+    });
+
+    const wordHandled = handleReaderSelectionRelease(
+        new window.MouseEvent('mouseup', { clientX: 120, clientY: 180, detail: 1 }),
+        {
+            getSelectionText: () => 'support',
+            getWordPopupOptions: () => ({ popupWidth: 640, popupHeight: 220 }),
+            delayMs: 0
+        }
+    );
+    assert.equal(wordHandled, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(messages.at(-1), {
+        action: 'fetchDictionary',
+        word: 'support'
+    });
+
+    const sentenceHandled = handleReaderSelectionRelease(
+        new window.MouseEvent('mouseup', { clientX: 160, clientY: 200, detail: 1 }),
+        {
+            getSelectionText: () => 'The quick brown fox',
+            getSentencePopupOptions: () => ({ popupWidth: 300, popupHeight: 140 }),
+            translateTriggerMode: 'click',
+            delayMs: 0
+        }
+    );
+    assert.equal(sentenceHandled, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const translateButton = getShadowRoot().querySelector('.translator-float-btn.translate-btn');
+    assert.ok(translateButton);
+    translateButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(messages.at(-1), {
+        action: 'translate',
+        text: 'The quick brown fox'
+    });
+    assert.match(getShadowText(), /敏捷的棕色狐狸/);
 });
 
 test('handleWordLookupInteraction waits for a speaker click before playing dictionary audio', async () => {

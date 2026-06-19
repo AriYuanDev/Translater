@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const contentCss = readFileSync(new URL('../chrome-extension/styles.css', import.meta.url), 'utf8');
 const mdViewerCss = readFileSync(new URL('../chrome-extension/mdviewer.css', import.meta.url), 'utf8');
 const pdfViewerCss = readFileSync(new URL('../chrome-extension/pdfviewer.css', import.meta.url), 'utf8');
+const viewerSharedCss = readFileSync(new URL('../chrome-extension/viewer-shared.css', import.meta.url), 'utf8');
 
 function getRuleBody(selector, css) {
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -48,4 +49,13 @@ test('Sentence popup content owns a readable foreground color', () => {
     const sentenceContentRule = getRuleBody('.translator-sentence-content', contentCss);
 
     assert.match(sentenceContentRule, /color:\s*#1a1a2e\s*;/);
+});
+
+test('shared viewer CSS owns loading and error states', () => {
+    assert.match(viewerSharedCss, /\.loading-overlay\s*\{/);
+    assert.match(viewerSharedCss, /\.error-container\s*\{/);
+    assert.doesNotMatch(mdViewerCss, /\.loading-overlay\s*\{/);
+    assert.doesNotMatch(mdViewerCss, /\.error-container\s*\{/);
+    assert.doesNotMatch(pdfViewerCss, /\.loading-overlay\s*\{/);
+    assert.doesNotMatch(pdfViewerCss, /\.error-container\s*\{/);
 });
