@@ -52,3 +52,6 @@ yarn-error.log*
 # Local browser automation artifacts
 output/
 output/playwright/
+
+# Local design companion artifacts
+.superpowers/
