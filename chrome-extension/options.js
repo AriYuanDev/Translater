@@ -30,6 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMessage = document.getElementById('statusMessage');
     const currentEngine = document.getElementById('currentEngine');
     const toast = document.getElementById('toast');
+    const translationStatusTitle = document.getElementById('translationStatusTitle');
+    const translationStatusState = document.getElementById('translationStatusState');
+    const translationStatusNote = document.getElementById('translationStatusNote');
+    const dictionaryStatusTitle = document.getElementById('dictionaryStatusTitle');
+    const dictionaryStatusState = document.getElementById('dictionaryStatusState');
+    const dictionaryStatusNote = document.getElementById('dictionaryStatusNote');
+    const quotaStatusTitle = document.getElementById('quotaStatusTitle');
+    const quotaStatusState = document.getElementById('quotaStatusState');
+    const quotaStatusNote = document.getElementById('quotaStatusNote');
     const clickTriggerToggle = document.getElementById('clickTriggerToggle');
     const deepLUsageStatus = document.getElementById('deepLUsageStatus');
     const refreshUsageBtn = document.getElementById('refreshUsageBtn');
@@ -81,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiKey: apiKey
                 });
 
-                showToast('✅ DeepL API key saved and verified');
+                showToast('DeepL API key saved and verified');
                 apiKeyInput.value = '';
                 loadCurrentStatus();
                 loadDeepLUsage();
@@ -103,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 action: 'setDeepLApiKey',
                 apiKey: ''
             });
-            showToast('🗑️ DeepL API key cleared');
+            showToast('DeepL API key cleared');
             loadCurrentStatus();
             loadDeepLUsage();
         }
@@ -171,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiKey: apiKey
                 });
 
-                showToast('✅ Merriam-Webster API key saved and verified');
+                showToast('Merriam-Webster API key saved and verified');
                 mwApiKeyInput.value = '';
                 loadMWStatus();
             } else {
@@ -192,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 action: 'setMWApiKey',
                 apiKey: ''
             });
-            showToast('🗑️ Merriam-Webster API key cleared');
+            showToast('Merriam-Webster API key cleared');
             loadMWStatus();
         }
     });
@@ -207,47 +216,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== Status Loading ====================
 
-    // Load DeepL status
+    function updateStatusCard({ titleEl, stateEl, noteEl, title, badge, tone, note }) {
+        if (titleEl) titleEl.textContent = title;
+        if (stateEl) {
+            stateEl.textContent = badge;
+            stateEl.className = `status-badge ${tone}`;
+        }
+        if (noteEl) noteEl.textContent = note;
+    }
+
     async function loadCurrentStatus() {
         try {
             const response = await sendMessageSafe({ action: 'getTranslationEngine' });
 
-            if (response.success && response.data) {
-                if (response.data.engine === 'DeepL') {
-                    currentEngine.innerHTML = `
-            <span class="engine-badge deepl">
-              ✨ DeepL (High Quality)
-            </span>
-          `;
-                    showStatus('DeepL API configured. Enjoy high-quality translation!', 'success');
-                } else {
-                    currentEngine.innerHTML = `
-            <span class="engine-badge google">
-              ⚠️ Not configured (Translation disabled)
-            </span>
-          `;
-                    showStatus('Please configure DeepL API key to enable translation.', 'warning');
-                }
+            if (response.success && response.data && response.data.engine === 'DeepL') {
+                currentEngine.textContent = 'DeepL';
+                updateStatusCard({
+                    titleEl: translationStatusTitle,
+                    stateEl: translationStatusState,
+                    noteEl: translationStatusNote,
+                    title: 'DeepL ready',
+                    badge: 'Ready',
+                    tone: 'ready',
+                    note: 'Selection translation and definition translation are enabled.'
+                });
+                showStatus('DeepL API configured. Translation is ready.', 'success');
+                return;
             }
+
+            currentEngine.textContent = 'Not configured';
+            updateStatusCard({
+                titleEl: translationStatusTitle,
+                stateEl: translationStatusState,
+                noteEl: translationStatusNote,
+                title: 'DeepL missing',
+                badge: 'Action needed',
+                tone: 'warning',
+                note: 'Add a DeepL API key to enable selected text translation.'
+            });
+            showStatus('Add a DeepL API key to enable translation.', 'warning');
         } catch (error) {
             console.error('Failed to load status:', error);
+            updateStatusCard({
+                titleEl: translationStatusTitle,
+                stateEl: translationStatusState,
+                noteEl: translationStatusNote,
+                title: 'Status unavailable',
+                badge: 'Unavailable',
+                tone: 'neutral',
+                note: 'Translation status could not be loaded.'
+            });
         }
     }
 
-    // Load MW status
     async function loadMWStatus() {
         try {
             const response = await sendMessageSafe({ action: 'getMWApiKey' });
 
-            if (response.success && response.data) {
-                if (response.data.apiKey) {
-                    showMWStatus('✅ Merriam-Webster API configured. Dictionary is ready.', 'success');
-                } else {
-                    showMWStatus('⚠️ Please configure Merriam-Webster API key to enable dictionary features.', 'warning');
-                }
+            if (response.success && response.data && response.data.apiKey) {
+                updateStatusCard({
+                    titleEl: dictionaryStatusTitle,
+                    stateEl: dictionaryStatusState,
+                    noteEl: dictionaryStatusNote,
+                    title: 'Dictionary ready',
+                    badge: 'Ready',
+                    tone: 'ready',
+                    note: 'Word lookup, IPA, and dictionary audio are enabled.'
+                });
+                showMWStatus('Merriam-Webster API configured. Dictionary is ready.', 'success');
+                return;
             }
+
+            updateStatusCard({
+                titleEl: dictionaryStatusTitle,
+                stateEl: dictionaryStatusState,
+                noteEl: dictionaryStatusNote,
+                title: 'Dictionary missing',
+                badge: 'Action needed',
+                tone: 'warning',
+                note: 'Add a Learners Dictionary API key to enable dictionary lookup.'
+            });
+            showMWStatus('Add a Merriam-Webster API key to enable dictionary features.', 'warning');
         } catch (error) {
             console.error('Failed to load MW status:', error);
+            updateStatusCard({
+                titleEl: dictionaryStatusTitle,
+                stateEl: dictionaryStatusState,
+                noteEl: dictionaryStatusNote,
+                title: 'Status unavailable',
+                badge: 'Unavailable',
+                tone: 'neutral',
+                note: 'Dictionary status could not be loaded.'
+            });
         }
     }
 
@@ -264,10 +324,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadDeepLUsage() {
         deepLUsageStatus.textContent = 'Checking usage...';
+        updateStatusCard({
+            titleEl: quotaStatusTitle,
+            stateEl: quotaStatusState,
+            noteEl: quotaStatusNote,
+            title: 'Checking usage',
+            badge: 'Loading',
+            tone: 'neutral',
+            note: 'DeepL quota is being checked.'
+        });
+
         try {
             const response = await sendMessageSafe({ action: 'getDeepLUsage' });
             if (!response || !response.success || !response.data) {
-                deepLUsageStatus.textContent = (response && response.error) || 'DeepL usage unavailable.';
+                const message = (response && response.error) || 'DeepL usage unavailable.';
+                deepLUsageStatus.textContent = message;
+                updateStatusCard({
+                    titleEl: quotaStatusTitle,
+                    stateEl: quotaStatusState,
+                    noteEl: quotaStatusNote,
+                    title: 'Usage unavailable',
+                    badge: 'Unavailable',
+                    tone: 'neutral',
+                    note: message
+                });
                 return;
             }
 
@@ -276,12 +356,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 const safeRemaining = Number.isFinite(remaining)
                     ? remaining
                     : Math.max(0, character_limit - character_count);
-                deepLUsageStatus.textContent = `${character_count} / ${character_limit} chars used. ${safeRemaining} remaining. Quota state: ${quotaState || 'ok'}.`;
+                const usageText = `${character_count} / ${character_limit} chars used. ${safeRemaining} remaining.`;
+                const stateText = quotaState || 'ok';
+
+                deepLUsageStatus.textContent = `${usageText} Quota state: ${stateText}.`;
+                updateStatusCard({
+                    titleEl: quotaStatusTitle,
+                    stateEl: quotaStatusState,
+                    noteEl: quotaStatusNote,
+                    title: `${safeRemaining} chars left`,
+                    badge: stateText === 'ok' ? 'Healthy' : stateText,
+                    tone: stateText === 'ok' ? 'ready' : 'warning',
+                    note: usageText
+                });
             } else {
                 deepLUsageStatus.textContent = 'Usage returned without character counts.';
+                updateStatusCard({
+                    titleEl: quotaStatusTitle,
+                    stateEl: quotaStatusState,
+                    noteEl: quotaStatusNote,
+                    title: 'Usage loaded',
+                    badge: 'Partial',
+                    tone: 'info',
+                    note: 'DeepL did not return character counts.'
+                });
             }
         } catch (error) {
-            deepLUsageStatus.textContent = error.message || 'DeepL usage unavailable.';
+            const message = error.message || 'DeepL usage unavailable.';
+            deepLUsageStatus.textContent = message;
+            updateStatusCard({
+                titleEl: quotaStatusTitle,
+                stateEl: quotaStatusState,
+                noteEl: quotaStatusNote,
+                title: 'Usage unavailable',
+                badge: 'Unavailable',
+                tone: 'neutral',
+                note: message
+            });
         }
     }
 
