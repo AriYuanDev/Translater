@@ -256,6 +256,7 @@ input:focus {
     padding: 9px 14px;
     font-size: 14px;
     font-weight: 700;
+    white-space: nowrap;
     cursor: pointer;
 }
 
